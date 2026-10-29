@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-29
+
 ### Added
 - **Terminals started by the panel (opt-in).** A new *Terminals* view runs real terminals (a login shell, or `claude` in one) in a worktree, rendered with xterm.js. Open several, group them by worktree, show 1, 2 or 4 side by side, close and reconnect (the last 256 KB of output is replayed). Buttons in the session drawer open a terminal or Claude directly in that worktree. Start with `--terminals` / `make run TERMINALS=1` / `make install TERMINALS=1`.
 - `wt-monitor --print-token` and `make open-terminals`: the authorisation secret lives in a `0600` file and is delivered to the browser once, through the fragment of a link.
@@ -45,5 +47,7 @@ All notable changes to this project are documented here. The format follows
 ### Added
 - Initial release: per-worktree CPU, memory, threads and CPU affinity from `/proc`; alerts with desktop notifications; Claude Code `Stop` hook for "task finished" events; session preview; pins; playful view; systemd user service.
 
+[Unreleased]: https://github.com/patrezelopes/wt-monitor/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/patrezelopes/wt-monitor/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/patrezelopes/wt-monitor/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/patrezelopes/wt-monitor/releases/tag/v0.1.0
