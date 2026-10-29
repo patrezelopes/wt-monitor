@@ -27,34 +27,40 @@ Requisitos: Linux, Rust (`cargo`) e `notify-send` (pacote `libnotify-bin`) para 
 
 ```bash
 git clone https://github.com/patrezelopes/wt-monitor && cd wt-monitor
-cargo run --release -- ~/dev 8765      # pasta raiz a monitorar, porta
+make run                                # monitora ~/dev na porta 8765
+make run ROOT=~/code PORT=9000          # ou escolha a pasta raiz e a porta
 ```
 
-Abra <http://127.0.0.1:8765>. Para ver a interface com dados fictícios, acrescente `?demo` — por exemplo <http://127.0.0.1:8765/?demo&mode=fun>.
+Abra <http://127.0.0.1:8765> (`make open`). Para ver a interface com dados fictícios, acrescente `?demo` — por exemplo <http://127.0.0.1:8765/?demo&mode=fun>.
+
+Tudo é um alvo do `make` — veja [Alvos do make](#alvos-do-make) ou rode `make help`.
 
 ### Iniciar com o Ubuntu (serviço de usuário do systemd)
 
 ```bash
-./install.sh            # compila, instala em ~/.local/bin e ativa o serviço de usuário
-systemctl --user status wt-monitor
+make install            # compila, instala em ~/.local/bin e ativa + inicia o serviço de usuário
+make status             # está rodando?   (make logs para acompanhar os logs)
+make linger             # opcional: sobe no boot, antes do login
 ```
 
-Para subir no boot, antes do login: `loginctl enable-linger $USER`.
+`make install ROOT=~/code PORT=9000` grava outra raiz/porta na unit. Para remover: `make uninstall`.
 
 ## Notificações dos agentes (hook do Claude Code)
 
 O Claude Code pode rodar um comando quando um agente termina de responder (o hook `Stop`). O `hook/wt-agent-hook` envia a última mensagem do agente ao painel, que a exibe e dispara uma notificação.
 
 ```bash
-python3 install-hooks.py                # todas as pastas ~/.claude, ~/.claude-*  (idempotente)
-python3 install-hooks.py ~/.claude      # ou só as pastas indicadas
+make hooks                              # todas as pastas ~/.claude e ~/.claude-*  (idempotente)
+make hooks CONFIG_DIRS=~/.claude        # ou só as pastas indicadas
+make hook-test                          # evento falso de "tarefa concluída", para ver funcionando
+make hooks-uninstall                    # remove o hook
 ```
 
 O script é copiado para `~/.local/bin/wt-agent-hook` e um hook `Stop` é adicionado a cada `settings.json`, com backup `settings.json.bak-wt-monitor` antes. Sessões do Claude já abertas podem precisar ser reiniciadas. Se o painel estiver fora do ar, o hook sai em silêncio e nunca bloqueia o agente. Veja [docs/agent-hook.md](docs/agent-hook.md).
 
 ## Configuração
 
-Linha de comando: `wt-monitor [raiz=~/dev] [porta=8765]`. Os limites de alerta são variáveis de ambiente (use `Environment=` na unit do systemd):
+Linha de comando: `wt-monitor [raiz=~/dev] [porta=8765]` (ou `ROOT=`/`PORT=` com `make`). Os limites de alerta são variáveis de ambiente (use `Environment=` na unit do systemd):
 
 | Variável | Padrão | Significado |
 |---|---|---|
@@ -66,6 +72,30 @@ Linha de comando: `wt-monitor [raiz=~/dev] [porta=8765]`. Os limites de alerta s
 Cada alerta dispara uma vez, rearma quando o valor volta ao normal e espera pelo menos 2 minutos antes de repetir. O hook respeita `WT_PORT` se você mudou a porta.
 
 Parâmetros de URL: `?mode=sober|fun`, `?demo`, `?open=<nome do worktree>` (com `?demo`).
+
+## Alvos do make
+
+`make` sem argumentos mostra esta lista. Variáveis que você pode sobrescrever: `ROOT` (padrão `~/dev`), `PORT` (`8765`), `PREFIX` (`~/.local`), `CONFIG_DIRS` (pastas de config do Claude para o hook; padrão: todas).
+
+| Alvo | O que faz |
+|---|---|
+| `make build` | Compila o binário otimizado |
+| `make run` | Roda em primeiro plano em `ROOT`/`PORT` |
+| `make open` | Abre o painel no navegador padrão |
+| `make test` | Testes unitários |
+| `make fmt` / `make fmt-check` | Formata / confere a formatação |
+| `make lint` | `clippy`, avisos viram erros |
+| `make js-check` | Confere a sintaxe do script da página (precisa do `node`) |
+| `make check` | Tudo que o CI roda: `fmt-check`, `lint`, `test`, `js-check` |
+| `make install` | Compila, instala em `PREFIX/bin`, ativa e (re)inicia o serviço de usuário |
+| `make uninstall` | Para e remove o serviço e o binário |
+| `make restart` / `status` / `logs` | Gerencia o serviço (`logs` acompanha o `journalctl`) |
+| `make linger` | Sobe o serviço no boot, antes do login |
+| `make hooks` | Instala o hook `Stop` do Claude Code (faz backup de cada `settings.json`) |
+| `make hooks-uninstall` | Remove o hook |
+| `make hook-test` | Envia um evento falso de "tarefa concluída" ao painel em execução |
+| `make screenshots` | Regenera `docs/img/*.png` com os dados de demonstração (precisa do Chrome) |
+| `make clean` | Remove os artefatos de build |
 
 ## Um worktree por conjunto de cores
 

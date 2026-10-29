@@ -27,34 +27,40 @@ Requirements: Linux, a Rust toolchain (`cargo`), and `notify-send` (package `lib
 
 ```bash
 git clone https://github.com/patrezelopes/wt-monitor && cd wt-monitor
-cargo run --release -- ~/dev 8765      # root directory to watch, port
+make run                                # watches ~/dev on port 8765
+make run ROOT=~/code PORT=9000          # or choose the root directory and port
 ```
 
-Open <http://127.0.0.1:8765>. Try the UI without the server (fake data): `index.html` is served at `/`, add `?demo` — e.g. <http://127.0.0.1:8765/?demo&mode=fun>.
+Open <http://127.0.0.1:8765> (`make open`). To try the UI with fake data, add `?demo` — e.g. <http://127.0.0.1:8765/?demo&mode=fun>.
+
+Everything is a `make` target — see [Make targets](#make-targets) or run `make help`.
 
 ### Start at login (systemd user service)
 
 ```bash
-./install.sh            # builds, installs to ~/.local/bin and enables the user service
-systemctl --user status wt-monitor
+make install            # builds, installs to ~/.local/bin and enables + starts the user service
+make status             # is it running?   (make logs to follow the logs)
+make linger             # optional: start at boot, before you log in
 ```
 
-To start at boot, before you log in: `loginctl enable-linger $USER`.
+`make install ROOT=~/code PORT=9000` bakes a different root/port into the unit. Remove it with `make uninstall`.
 
 ## Agent notifications (Claude Code hook)
 
 Claude Code can run a command when an agent finishes responding (the `Stop` hook). `hook/wt-agent-hook` posts the agent's last message to the dashboard, which shows it and raises a notification.
 
 ```bash
-python3 install-hooks.py                # all of ~/.claude, ~/.claude-*  (idempotent)
-python3 install-hooks.py ~/.claude      # or only specific config dirs
+make hooks                              # all of ~/.claude and ~/.claude-*  (idempotent)
+make hooks CONFIG_DIRS=~/.claude        # or only specific config dirs
+make hook-test                          # fake "task finished" event, to see it work
+make hooks-uninstall                    # remove it again
 ```
 
 It copies the script to `~/.local/bin/wt-agent-hook` and adds a `Stop` hook to each `settings.json`, saving a `settings.json.bak-wt-monitor` backup first. Already-open Claude sessions may need a restart to pick the hook up. If the dashboard is not running the hook exits silently and never blocks the agent. See [docs/agent-hook.md](docs/agent-hook.md).
 
 ## Configuration
 
-Command line: `wt-monitor [root=~/dev] [port=8765]`. Alert thresholds are environment variables (set them with `Environment=` in the systemd unit):
+Command line: `wt-monitor [root=~/dev] [port=8765]` (or `ROOT=`/`PORT=` with `make`). Alert thresholds are environment variables (set them with `Environment=` in the systemd unit):
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -66,6 +72,30 @@ Command line: `wt-monitor [root=~/dev] [port=8765]`. Alert thresholds are enviro
 Each alert fires once, re-arms when the value returns to normal, and waits at least 2 minutes before repeating. The hook honours `WT_PORT` if you changed the port.
 
 URL parameters: `?mode=sober|fun`, `?demo`, `?open=<worktree name>` (with `?demo`).
+
+## Make targets
+
+`make` with no arguments prints this list. Variables you can override: `ROOT` (default `~/dev`), `PORT` (`8765`), `PREFIX` (`~/.local`), `CONFIG_DIRS` (Claude config dirs for the hook; default all).
+
+| Target | What it does |
+|---|---|
+| `make build` | Build the optimized binary |
+| `make run` | Run in the foreground on `ROOT`/`PORT` |
+| `make open` | Open the dashboard in the default browser |
+| `make test` | Unit tests |
+| `make fmt` / `make fmt-check` | Format / check formatting |
+| `make lint` | `clippy`, warnings are errors |
+| `make js-check` | Syntax-check the page script (needs `node`) |
+| `make check` | Everything CI runs: `fmt-check`, `lint`, `test`, `js-check` |
+| `make install` | Build, install to `PREFIX/bin`, enable + (re)start the systemd user service |
+| `make uninstall` | Stop and remove the service and binary |
+| `make restart` / `status` / `logs` | Manage the service (`logs` follows `journalctl`) |
+| `make linger` | Start the service at boot, before you log in |
+| `make hooks` | Install the Claude Code `Stop` hook (backs up each `settings.json`) |
+| `make hooks-uninstall` | Remove the hook again |
+| `make hook-test` | Send a fake "task finished" event to the running dashboard |
+| `make screenshots` | Regenerate `docs/img/*.png` from demo data (needs Chrome) |
+| `make clean` | Remove build artifacts |
 
 ## Pinning each worktree to its own CPU cores
 

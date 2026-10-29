@@ -1,17 +1,8 @@
 name: ci
 on: [push, pull_request]
 jobs:
-  build:
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: cargo fmt --check
-      - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo test
-      - name: Syntax-check the page script
-        run: |
-          python3 - <<'PY'
-          import re
-          open('page.js','w').write(re.search(r'<script>(.*)</script>', open('index.html').read(), re.S).group(1))
-          PY
-          node --check page.js
+      - run: make check

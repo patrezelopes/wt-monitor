@@ -7,21 +7,23 @@ It reads the hook payload from stdin (`cwd`, `session_id`, `transcript_path`, an
 ## Install / uninstall
 
 ```bash
-python3 install-hooks.py [config-dir ...]
+make hooks                           # same as: python3 install-hooks.py
+make hooks CONFIG_DIRS=~/.claude     # only these config dirs
+make hooks-uninstall                 # same as: python3 install-hooks.py --uninstall
 ```
 
-Without arguments it targets `~/.claude` and every `~/.claude-*` directory. For each one it:
+Without `CONFIG_DIRS` it targets `~/.claude` and every `~/.claude-*` directory. For each one it:
 
 1. copies the script to `~/.local/bin/wt-agent-hook`;
 2. backs up `settings.json` to `settings.json.bak-wt-monitor`;
 3. appends `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"~/.local/bin/wt-agent-hook","timeout":5}]}]}}` — skipping directories where it is already present.
 
-To uninstall, remove that entry from `settings.json` (or restore the backup) and delete `~/.local/bin/wt-agent-hook`.
+`make hooks-uninstall` removes only wt-monitor's entry (other hooks are left alone), saves `settings.json.bak-wt-monitor-uninstall`, and — when run without `CONFIG_DIRS` — deletes `~/.local/bin/wt-agent-hook`. Both commands are idempotent.
 
-## Manual test
+## Test
 
 ```bash
-printf '{"cwd":"%s","session_id":"abcdef123456","last_assistant_message":"hello"}' "$PWD" | ./hook/wt-agent-hook
+make hook-test        # posts a fake event to the dashboard on PORT (default 8765)
 ```
 
 The message appears in the "Agents" card. Note `Stop` fires after every completed response; if that is too chatty, filter in the hook (for example by response duration).

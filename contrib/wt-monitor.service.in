@@ -2,7 +2,7 @@
 Description=wt-monitor: per-worktree CPU/memory dashboard
 
 [Service]
-ExecStart=%h/.local/bin/wt-monitor %h/dev 8765
+ExecStart=@BIN@/wt-monitor @ROOT@ @PORT@
 Restart=on-failure
 RestartSec=3
 # Alert thresholds (desktop notifications)
