@@ -149,6 +149,7 @@ fn mem_info() -> (u64, u64) {
 }
 
 struct Group {
+    branch: String,
     cpu: f64,
     rss: u64,
     threads: u32,
@@ -157,6 +158,34 @@ struct Group {
     cores: BTreeSet<u32>,
     aff: BTreeSet<String>,
     procs: Vec<(Proc, f64)>,
+}
+
+/// Branch atual do worktree, lida de `.git/HEAD` (ou do `gitdir:` apontado em worktrees ligados).
+/// Em HEAD destacado devolve o início do hash.
+fn branch_of(wt: &Path) -> String {
+    let git = wt.join(".git");
+    let head = if git.is_dir() {
+        git.join("HEAD")
+    } else {
+        let Ok(s) = fs::read_to_string(&git) else {
+            return String::new();
+        };
+        let Some(d) = s.trim().strip_prefix("gitdir:") else {
+            return String::new();
+        };
+        let d = Path::new(d.trim());
+        let d = if d.is_absolute() {
+            d.to_path_buf()
+        } else {
+            wt.join(d)
+        };
+        d.join("HEAD")
+    };
+    let h = fs::read_to_string(head).unwrap_or_default();
+    match h.trim().strip_prefix("ref: refs/heads/") {
+        Some(b) => b.to_string(),
+        None => h.trim().chars().take(8).collect(),
+    }
 }
 
 /// Limites de alerta, ajustáveis por variável de ambiente.
@@ -317,6 +346,7 @@ fn sampler(root: PathBuf, out: Arc<Mutex<String>>, events: Arc<Mutex<VecDeque<Ev
                 _ => 0.0,
             };
             let g = groups.entry(p.wt.clone()).or_insert_with(|| Group {
+                branch: branch_of(&p.wt),
                 cpu: 0.0,
                 rss: 0,
                 threads: 0,
@@ -464,8 +494,8 @@ fn sampler(root: PathBuf, out: Arc<Mutex<String>>, events: Arc<Mutex<VecDeque<Ev
             }
             let _ = write!(
                 j,
-                "{{\"path\":\"{}\",\"name\":\"{}\",\"cpu\":{:.1},\"rss\":{},\"threads\":{},\"nproc\":{},\"claude\":{},\"cores_in_use\":[{}],\"aff\":[{}],\"procs\":[",
-                esc(&path.to_string_lossy()), esc(&name), g.cpu, g.rss, g.threads, g.nproc, g.claude,
+                "{{\"path\":\"{}\",\"name\":\"{}\",\"branch\":\"{}\",\"cpu\":{:.1},\"rss\":{},\"threads\":{},\"nproc\":{},\"claude\":{},\"cores_in_use\":[{}],\"aff\":[{}],\"procs\":[",
+                esc(&path.to_string_lossy()), esc(&name), esc(&g.branch), g.cpu, g.rss, g.threads, g.nproc, g.claude,
                 g.cores.iter().map(|c| c.to_string()).collect::<Vec<_>>().join(","),
                 g.aff.iter().map(|a| format!("\"{}\"", esc(a))).collect::<Vec<_>>().join(","),
             );
@@ -667,13 +697,67 @@ fn pct_decode(s: &str) -> String {
 }
 
 /// Só serve transcrições de worktrees dentro da raiz monitorada; o caminho nunca vira leitura arbitrária.
+/// Valor bruto de um parâmetro da query (`a=1&b=2`).
+fn qparam<'a>(query: &'a str, key: &str) -> Option<&'a str> {
+    query
+        .split('&')
+        .find_map(|kv| kv.strip_prefix(key)?.strip_prefix('='))
+}
+
+/// Subagentes da sessão: `<projeto>/<sessão>/subagents/agent-<id>.jsonl` + `.meta.json`.
+/// Devolve um array JSON com os mais recentes (até 8, últimas 2 h) e o fim de cada transcrição.
+fn subagents_json(main: &Path) -> String {
+    let dir = main.with_extension("").join("subagents");
+    let now = SystemTime::now();
+    let mut items: Vec<(PathBuf, String, SystemTime)> = fs::read_dir(&dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|e| {
+            let p = e.path();
+            let name = p.file_name()?.to_str()?;
+            let id = name
+                .strip_prefix("agent-")?
+                .strip_suffix(".jsonl")?
+                .to_string();
+            let m = e.metadata().ok()?.modified().ok()?;
+            (now.duration_since(m).unwrap_or_default() < Duration::from_secs(7200))
+                .then_some((p, id, m))
+        })
+        .collect();
+    items.sort_by_key(|i| std::cmp::Reverse(i.2));
+    items.truncate(8);
+    let list: Vec<String> = items
+        .iter()
+        .map(|(p, id, m)| {
+            let meta = fs::read_to_string(p.with_file_name(format!("agent-{id}.meta.json")))
+                .unwrap_or_default();
+            let meta: String = meta.chars().take(2000).collect();
+            let mt = m
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_secs_f64())
+                .unwrap_or(0.0);
+            let lines = tail_lines(p, 40_000, 40_000, 12);
+            format!(
+                "{{\"id\":\"{}\",\"mtime\":{mt:.0},\"meta\":\"{}\",\"lines\":[{}]}}",
+                esc(id),
+                esc(&meta),
+                lines
+                    .iter()
+                    .map(|l| format!("\"{}\"", esc(l)))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            )
+        })
+        .collect();
+    format!("[{}]", list.join(","))
+}
+
+/// Só serve transcrições de worktrees dentro da raiz monitorada; o caminho nunca vira leitura arbitrária.
+/// Parâmetros: `path` (obrigatório), `n` (linhas, 1-400, padrão 60), `b` (bytes lidos do fim, até 800 KB), `subs=1`.
 fn preview(ctx: &Ctx, query: &str) -> String {
     let none = || "{\"found\":false}".to_string();
-    let raw = query
-        .split('&')
-        .find_map(|kv| kv.strip_prefix("path="))
-        .map(pct_decode)
-        .unwrap_or_default();
+    let raw = qparam(query, "path").map(pct_decode).unwrap_or_default();
     let wt = PathBuf::from(&raw);
     let ok = wt.is_absolute()
         && wt.starts_with(&ctx.root)
@@ -685,7 +769,23 @@ fn preview(ctx: &Ctx, query: &str) -> String {
     let Some((file, mtime)) = latest_transcript(&wt) else {
         return none();
     };
-    let lines = tail_lines(&file, 400_000, 60_000, 60);
+    let num = |k: &str, d: u64, lo: u64, hi: u64| {
+        qparam(query, k)
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(d)
+            .clamp(lo, hi)
+    };
+    let lines = tail_lines(
+        &file,
+        num("b", 400_000, 10_000, 800_000),
+        60_000,
+        num("n", 60, 1, 400) as usize,
+    );
+    let subs = if qparam(query, "subs") == Some("1") {
+        subagents_json(&file)
+    } else {
+        "[]".to_string()
+    };
     let session = file
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
@@ -695,7 +795,7 @@ fn preview(ctx: &Ctx, query: &str) -> String {
         .map(|d| d.as_secs_f64())
         .unwrap_or(0.0);
     format!(
-        "{{\"found\":true,\"session\":\"{}\",\"mtime\":{mt:.0},\"lines\":[{}]}}",
+        "{{\"found\":true,\"session\":\"{}\",\"mtime\":{mt:.0},\"lines\":[{}],\"subs\":{subs}}}",
         esc(&session),
         lines
             .iter()
@@ -862,5 +962,55 @@ mod tests {
         fs::write(&f, "{\"a\":1}\n{\"a\":2}\n{\"a\":3}\n").unwrap();
         assert_eq!(tail_lines(&f, 1000, 100, 2), vec!["{\"a\":2}", "{\"a\":3}"]);
         let _ = fs::remove_file(&f);
+    }
+
+    #[test]
+    fn query_params() {
+        assert_eq!(qparam("path=%2Fa&n=5&subs=1", "n"), Some("5"));
+        assert_eq!(qparam("path=%2Fa&n=5&subs=1", "subs"), Some("1"));
+        assert_eq!(qparam("path=%2Fa", "x"), None);
+        assert_eq!(qparam("xpath=1", "path"), None);
+    }
+
+    #[test]
+    fn subagents_are_read_with_their_meta() {
+        let base = std::env::temp_dir().join(format!("wt-monitor-subs-{}", std::process::id()));
+        let sub = base.join("sess1/subagents");
+        fs::create_dir_all(&sub).unwrap();
+        fs::write(base.join("sess1.jsonl"), "{}\n").unwrap();
+        fs::write(sub.join("agent-abc123.jsonl"), "{\"a\":1}\n{\"a\":2}\n").unwrap();
+        fs::write(
+            sub.join("agent-abc123.meta.json"),
+            "{\"agentType\":\"backend\",\"finished\":false}",
+        )
+        .unwrap();
+        fs::write(sub.join("notes.txt"), "ignored").unwrap();
+        let json = subagents_json(&base.join("sess1.jsonl"));
+        assert!(json.contains("\"id\":\"abc123\""), "{json}");
+        assert!(json.contains("agentType"), "{json}");
+        assert!(json.contains("{\\\"a\\\":2}"), "{json}");
+        assert!(!json.contains("notes"), "{json}");
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn branch_from_regular_repo_and_linked_worktree() {
+        let base = std::env::temp_dir().join(format!("wt-monitor-branch-{}", std::process::id()));
+        let repo = base.join("repo");
+        fs::create_dir_all(repo.join(".git")).unwrap();
+        fs::write(repo.join(".git/HEAD"), "ref: refs/heads/main\n").unwrap();
+        assert_eq!(branch_of(&repo), "main");
+
+        let gd = repo.join(".git/worktrees/feat");
+        fs::create_dir_all(&gd).unwrap();
+        fs::write(gd.join("HEAD"), "ref: refs/heads/feat/x\n").unwrap();
+        let wt = base.join("wt");
+        fs::create_dir_all(&wt).unwrap();
+        fs::write(wt.join(".git"), format!("gitdir: {}\n", gd.display())).unwrap();
+        assert_eq!(branch_of(&wt), "feat/x");
+
+        fs::write(gd.join("HEAD"), "0123456789abcdef\n").unwrap();
+        assert_eq!(branch_of(&wt), "01234567");
+        let _ = fs::remove_dir_all(&base);
     }
 }
