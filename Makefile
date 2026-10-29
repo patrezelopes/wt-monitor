@@ -1,5 +1,8 @@
 # wt-monitor: developer and operator tasks. Run `make help`.
 
+# rustup installs cargo in ~/.cargo/bin, which non-login shells often don't have on PATH
+export PATH := $(HOME)/.cargo/bin:$(PATH)
+
 ROOT     ?= $(HOME)/dev
 PORT     ?= 8765
 PREFIX   ?= $(HOME)/.local
