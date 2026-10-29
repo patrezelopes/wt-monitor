@@ -15,6 +15,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 - **`make install` now enables terminals and priority control by default.** Pass `TERMINALS=` and/or `CONTROL=` (empty) to install without them. `make run` is unchanged (both off unless asked).
+- **Activity tab is readable.** Agent and user messages render Markdown (bold, italics, lists, headings, tables, code blocks, links), and Claude Code's XML-like tags (`<task-notification>`, `<system-reminder>`…) become labelled cards with the status as a badge. One-line spots (finished-task list, sub-agent conversation, Arena bubbles) show the text without markup. Everything is escaped before it becomes HTML.
+- CPU is shown as a percentage of the whole machine (100% = all cores) instead of per-core percentages above 100%, with the raw cores in the tooltip.
 - The session drawer header no longer wraps the close button on long worktree names.
 
 ## [0.3.1] - 2026-10-29

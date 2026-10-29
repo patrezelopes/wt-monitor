@@ -118,6 +118,14 @@ try {
     ok(await until(() => cgOf(sleepPid) === origin), 'o processo volta ao cgroup de origem', cgOf(sleepPid));
   }
 
+  // 4) texto das conversas: markdown e tags viram HTML legível, e conteúdo malicioso nunca vira HTML
+  const rich = t => c.eval(`richText(${JSON.stringify(t)})`);
+  const evil = await rich('<img src=x onerror=alert(1)> <script>alert(1)</script> [x](javascript:alert(1)) **b** `<b>c</b>`');
+  ok(!/<img|<script|href="javascript/i.test(evil) && evil.includes('<strong>b</strong>'), 'markdown vira HTML, mas HTML e links javascript: do texto nunca são interpretados', evil);
+  ok((await rich('<task-notification><status>completed</status><summary>ok</summary></task-notification>')).includes('class="st ok"'), '<task-notification> vira um cartão com o status em destaque');
+  ok((await rich('texto **truncado\n```ts\nconst x')).includes('<pre>') && (await rich('<task-notification><summary>cortado')).includes('class="xml"'), 'texto truncado no meio (bloco de código ou tag abertos) não quebra a renderização');
+  ok(await c.eval(`plain('**Feito** em \`src/a.ts\` <summary>x</summary>') === 'Feito em src/a.ts x'`), 'as listas de uma linha mostram o texto sem marcações');
+
   await c.eval(`document.querySelector('[data-mode="sober"]').click()`);
   ok(await c.until(`!document.getElementById('overview').hidden && document.getElementById('terms').hidden`), 'voltar para a Visão geral esconde os terminais');
   ok(c.errors.length === 0, 'nenhum erro de JavaScript no console', c.errors.join(' | '));

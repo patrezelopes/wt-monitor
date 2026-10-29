@@ -70,7 +70,7 @@
   .row:hover .av, .row.sel .av { border-color:var(--elev) }
   .skill { display:inline-block; max-width:100%; height:24px; line-height:22px; padding:0 8px; border:1px solid var(--border2); border-radius:6px; color:var(--muted); font-size:11.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; vertical-align:middle }
   .meter { display:flex; align-items:center; gap:10px } .meter .bar { flex:1; height:4px; border-radius:2px; background:var(--border) } .meter .bar i { display:block; height:100%; border-radius:2px }
-  .meter span { width:38px; text-align:right; font-size:13px }
+  .meter span { width:58px; white-space:nowrap; text-align:right; font-size:13px }
   aside.side { flex:0 1 320px; min-width:280px; display:flex; flex-direction:column; gap:16px }
   .box h2 { margin:0; padding:14px 16px; font-size:13px; font-weight:600; border-bottom:1px solid var(--border) }
   .li { padding:12px 16px; border-bottom:1px solid var(--border); font-size:12.5px } .li:last-child { border-bottom:0 }
@@ -107,7 +107,22 @@
   .talk > div { display:grid; grid-template-columns:62px 150px 76px minmax(0,1fr); gap:10px; align-items:baseline; padding:9px 14px; border-top:1px solid var(--border); font-size:12.5px } .talk > div:first-child { border-top:0 }
   .talk .ov { white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
   .feed { display:flex; flex-direction:column; gap:6px }
-  .it { border-left:3px solid var(--border); padding:2px 0 2px 8px; font-size:12.5px; overflow-wrap:anywhere; white-space:pre-wrap }
+  .it { border-left:3px solid var(--border); padding:2px 0 2px 10px; font-size:13px; line-height:1.5; overflow-wrap:anywhere }
+  .it .body { display:block } .it.result .body, .it.tool .body { font-size:12px }
+  .it.tool .tn { font-weight:600; color:var(--text); margin-right:6px } .it.result .body { font-family:"JetBrains Mono",ui-monospace,monospace; font-size:11.5px; white-space:pre-wrap }
+  .md > :first-child { margin-top:0 } .md > :last-child { margin-bottom:0 }
+  .md p { margin:5px 0 } .md ul, .md ol { margin:5px 0; padding-left:20px } .md li { margin:2px 0 }
+  .md .h { margin:9px 0 3px; font-weight:600; color:var(--text) } .md strong { font-weight:600; color:var(--text) }
+  .md code { font:12px "JetBrains Mono",ui-monospace,monospace; padding:1px 5px; border:1px solid var(--border); border-radius:5px; background:var(--elev) }
+  .md pre { margin:7px 0; padding:9px 11px; border:1px solid var(--border); border-radius:8px; background:var(--bg); overflow-x:auto; white-space:pre } .md pre code { padding:0; border:0; background:none; font-size:12px }
+  .md a { color:var(--accent); text-underline-offset:2px }
+  .md table { margin:7px 0; border-collapse:collapse; font-size:12px } .md th, .md td { padding:4px 9px; border:1px solid var(--border); text-align:left } .md th { background:var(--elev); font-weight:600 }
+  .xml { margin:5px 0; border:1px solid var(--border); border-radius:8px; background:var(--surface); overflow:hidden }
+  .xml > .xh { display:flex; align-items:center; gap:8px; padding:5px 10px; border-bottom:1px solid var(--border); font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--muted) }
+  .xml > .xb { padding:6px 10px } .xml .kv { display:grid; grid-template-columns:84px minmax(0,1fr); gap:10px; padding:2px 0 } .xml .kv > b { font-weight:500; color:var(--faint) }
+  .xml .st { padding:0 7px; height:18px; display:inline-flex; align-items:center; border-radius:9px; font-size:11px; font-weight:600; letter-spacing:0; text-transform:none; color:var(--accent-ink); background:var(--muted) }
+  .xml .st.ok { background:var(--work) } .xml .st.bad { background:var(--hot); color:#fff } .xml .st.run { background:var(--wait); color:#1a1100 }
+  .xml.quiet { background:transparent } .xml.quiet > .xb { color:var(--muted); font-size:12px }
   .it .k { font-size:10.5px; font-weight:700; letter-spacing:.05em; margin-right:6px; color:var(--muted) } .it time { color:var(--faint); font-size:11px; margin-left:6px }
   .it.user { border-color:var(--accent) } .it.text { border-color:var(--work) } .it.tool { border-color:var(--wait) } .it.result { color:var(--muted) }
   .it.user .k { color:var(--accent) } .it.text .k { color:var(--work) } .it.tool .k { color:var(--wait) }
@@ -197,7 +212,7 @@
     <section class="kpis" id="kpis" aria-label="Resumo"></section>
     <div class="layout">
       <section class="card table" aria-label="Worktrees"><div class="tin">
-        <div class="thead"><span></span><span>Worktree</span><span>Status</span><span>Agentes</span><span>Skill</span><span>CPU</span><span>Memória</span><span>60 s</span></div>
+        <div class="thead"><span></span><span>Worktree</span><span>Status</span><span>Agentes</span><span>Skill</span><span id="cpuhead">CPU (% da máquina)</span><span>Memória</span><span>60 s</span></div>
         <div id="rows"></div>
         <div class="empty" id="empty" hidden></div>
       </div></section>
@@ -301,7 +316,7 @@ function demoPreview(path) {
   const A = (c, s) => ({ type: 'assistant', timestamp: iso(s), message: { role: 'assistant', content: c } });
   const U = (c, s) => ({ type: 'user', timestamp: iso(s), message: { role: 'user', content: c } });
   const tu = (n, input) => ({ type: 'tool_use', name: n, input });
-  const note = (id, status, summary, s) => U(`<task-notification>\n<task-id>${id}</task-id>\n<status>${status}</status>\n<summary>${summary}</summary>\n</task-notification>`, s);
+  const note = (id, status, summary, s, result = '') => U(`<task-notification>\n<task-id>${id}</task-id>\n<status>${status}</status>\n<summary>${summary}</summary>${result ? `\n<result>${result}</result>` : ''}\n</task-notification>`, s);
   const sub = (id, type, description, finished, age, tool, extra = []) => ({
     id, mtime: now / 1000 - age, meta: JSON.stringify({ agentType: type, description, model: 'sonnet', finished }),
     lines: [A([tu(tool[0], tool[1])], age + 5), ...extra].map(o => JSON.stringify(o)),
@@ -309,11 +324,11 @@ function demoPreview(path) {
   const scenes = {
     'acme/api': { age: 3, lines: [
       U('Adicione paginação na listagem de pedidos', 600),
-      A([{ type: 'text', text: 'Vou dividir o trabalho entre agentes especializados.' }, tu('Skill', { skill: 'agent-orchestration' })], 560),
+      A([{ type: 'text', text: '## Plano\n\nVou dividir o trabalho em **três frentes**:\n\n- `backend`: endpoints com `page` e `pageSize`\n- `frontend`: listagem consumindo a nova API\n- `reviewer`: revisão da PR\n\n| Camada | Arquivo |\n|---|---|\n| API | `src/orders/list.ts` |\n| UI | `web/Orders.tsx` |\n\n```ts\nconst page = Math.min(pageSize, 100);\n```' }, tu('Skill', { skill: 'agent-orchestration' })], 560),
       A([tu('Agent', { subagent_type: 'backend', description: 'Implementar paginação nos endpoints de pedidos' })], 540),
       A([tu('Agent', { subagent_type: 'frontend', description: 'Ajustar a listagem para consumir page e pageSize' })], 538),
       A([tu('Agent', { subagent_type: 'reviewer', description: 'Revisar a PR' })], 300),
-      note('ag3', 'completed', 'PR aprovada com ressalvas, sem bloqueantes.', 70),
+      note('ag3', 'completed', 'PR aprovada com ressalvas, sem bloqueantes.', 70, '**Aprovada.** Dois pontos menores:\n\n1. Cobrir `pageSize` igual a zero\n2. Documentar o limite de **100** itens'),
       A([tu('SendMessage', { to: 'ag1', summary: 'Limite máximo de pageSize: 100' })], 14)],
       subs: [sub('ag1', 'backend', 'Implementar paginação', false, 4, ['Edit', { file_path: 'src/orders/list.ts' }], [A([tu('SendMessage', { to: 'main', summary: 'Limite máximo de pageSize? Sugiro 100.' })], 40)]),
              sub('ag2', 'frontend', 'Ajustar a listagem', false, 2, ['Bash', { command: 'npm test -- orders' }]),
@@ -494,6 +509,10 @@ function setPin(btn, on, name) {
 }
 
 /* ---------- tabela (visão geral) ---------- */
+// Porcentagem da máquina: 100% = todos os cores (9.7 cores em 16 = 61%). O valor bruto do kernel (100% = 1 core) fica nas dicas.
+const fmtN = g => { const c = g.cpu / 100; return c < 0.05 ? '0' : c < 10 ? c.toFixed(1) : c.toFixed(0); };
+const fmtPct = g => `${(g.cpu / data.cores.length).toFixed(0)}%`;
+const cpuTip = g => `${fmtN(g)} de ${data.cores.length} cores em uso · 100% = todos os cores (cada core = ${(100 / data.cores.length).toFixed(1)}%)`;
 const starved = g => data && g.wait >= data.cfg.wait_pct && g.waiting >= 0.3;
 const queueLine = g => g.nproc && typeof g.wait === 'number' ? `<div class="qwait${starved(g) ? ' bad' : ''}" title="Parte do tempo pronto para rodar que este worktree passou esperando por um core">fila ${g.wait.toFixed(0)}%</div>` : '';
 const PRIO = { alta: ['↑ alta', 'up'], baixa: ['↓ baixa', 'down'], foco: ['◎ foco', 'up'], fundo: ['↓ fundo', 'down'] };
@@ -522,7 +541,7 @@ function updateRow(el, r) {
   const shown = r.agents.slice(0, 4), more = r.agents.length - shown.length, subs = r.agents.filter(x => !x.main).length;
   setHTML(el.querySelector('.c-ag'), r.agents.length ? `<div class="stack">${shown.map(x => `<span class="av${x.main ? ' main' : ''}" title="${esc(x.title)}">${esc(x.letter)}</span>`).join('')}<small>${more > 0 ? `+${more}` : subs ? `+${subs} sub` : ''}</small></div>` : '<span class="faint">—</span>');
   setHTML(el.querySelector('.c-sk'), r.skill ? `<span class="skill mono" title="${esc(r.skill.name)}">${esc(r.skill.name)}</span>` : '<span class="faint">—</span>');
-  setHTML(el.querySelector('.c-cpu'), `<div class="meter"><div class="bar"><i style="width:${Math.min(100, g.cpu / 4)}%;background:${color}"></i></div><span>${g.cpu.toFixed(0)}%</span></div>${queueLine(g)}`);
+  setHTML(el.querySelector('.c-cpu'), `<div class="meter" title="${cpuTip(g)}"><div class="bar"><i style="width:${Math.min(100, g.cpu / data.cores.length)}%;background:${color}"></i></div><span>${fmtPct(g)}</span></div>${queueLine(g)}`);
   setHTML(el.querySelector('.c-mem'), `${(g.rss / 1e9).toFixed(1)} <span class="faint">GB</span>`);
   setHTML(el.querySelector('.c-sp'), spark(hist[g.path] || [], 88, 28, color, Math.max(100, ...(hist[g.path] || [0]))));
 }
@@ -568,15 +587,15 @@ function updateStation(el, r) {
   el.querySelector('.r').textContent = `Nv ${L} · ${n} tarefa${n === 1 ? '' : 's'}`;
   const talk = r.a && r.a.talk[r.a.talk.length - 1], fresh = talk && nowSec() - talk.t < 60;
   el.querySelector('.bub').textContent =
-    state === 'done' ? '✔ ' + (ev.msg.slice(0, 80) || 'Tarefa concluída!') :
+    state === 'done' ? '✔ ' + (plain(ev.msg).slice(0, 80) || 'Tarefa concluída!') :
     state === 'hot' ? 'No limite — veja CPU e memória.' :
     state === 'waiting' ? 'Aguardando a sua resposta.' :
-    state === 'working' ? (fresh ? `${talk.from} → ${talk.to}: ${talk.msg}`.slice(0, 70) : `rodando ${baseName(g.procs[0]?.cmd || '') || 'algo'}…`) :
+    state === 'working' ? (fresh ? `${talk.from} → ${talk.to}: ${plain(talk.msg)}`.slice(0, 70) : `rodando ${baseName(g.procs[0]?.cmd || '') || 'algo'}…`) :
     g.idle ? 'sem processos' : 'zzz… aguardando';
   setHTML(el.querySelector('.layer'), stageLayer(r));
   const bar = (label, v, w, c) => `<div><div class="h"><span>${label}</span><span>${v}</span></div><div class="bar"><i style="width:${Math.min(100, w)}%;background:${c}"></i></div></div>`;
   setHTML(el.querySelector('.stats'),
-    bar('CPU', g.cpu.toFixed(0) + '%', 100 * g.cpu / data.cfg.cpu_pct, state === 'hot' ? 'var(--hot)' : 'var(--work)') +
+    bar('CPU', fmtPct(g), 100 * g.cpu / data.cfg.cpu_pct, state === 'hot' ? 'var(--hot)' : 'var(--work)') +
     bar('Memória', fmtB(g.rss), 100 * g.rss / data.cfg.mem_bytes, state === 'hot' ? 'var(--hot)' : 'var(--muted)') +
     bar(`XP até o Nv ${L + 1}`, (p * 100).toFixed(0) + '%', p * 100, 'var(--wait)'));
 }
@@ -626,19 +645,105 @@ function agentsTab(r) {
     : '<div class="muted" style="font-size:13px">Nenhuma skill invocada nesta sessão.</div>') + '</section>';
   h += `<section><h3><span>Agentes · ${1 + running} em execução</span><span>${a.talk.filter(t => nowSec() - t.t < 40).length ? 'conversando agora' : ''}</span></h3>${topology(r)}</section>`;
   h += `<section><h3>Conversa entre agentes</h3>` + (a.talk.length
-    ? `<div class="talk">${a.talk.slice(-8).map(m => `<div><span class="faint mono">${clock(m.t)}</span><span class="muted mono">${esc(m.from)} <span class="faint">→</span> ${esc(m.to)}</span><b style="font-weight:500;color:${m.kind === 'Concluiu' ? 'var(--work)' : m.kind === 'Falhou' ? 'var(--hot)' : m.kind === 'Mensagem' ? 'var(--wait)' : 'var(--muted)'}">${m.kind}</b><span class="ov" title="${esc(m.msg)}">${esc(m.msg)}</span></div>`).join('')}</div>`
+    ? `<div class="talk">${a.talk.slice(-8).map(m => `<div><span class="faint mono">${clock(m.t)}</span><span class="muted mono">${esc(m.from)} <span class="faint">→</span> ${esc(m.to)}</span><b style="font-weight:500;color:${m.kind === 'Concluiu' ? 'var(--work)' : m.kind === 'Falhou' ? 'var(--hot)' : m.kind === 'Mensagem' ? 'var(--wait)' : 'var(--muted)'}">${m.kind}</b><span class="ov" title="${esc(plain(m.msg))}">${esc(plain(m.msg))}</span></div>`).join('')}</div>`
     : '<div class="muted" style="font-size:13px">Sem mensagens entre agentes nesta sessão.</div>') + '</section>';
   return h;
 }
 const LABEL = { user: 'VOCÊ', text: 'AGENTE', tool: 'FERRAMENTA', result: 'RESULTADO' };
+/* ---------- texto das conversas: markdown e tags XML em forma legível ---------- */
+function mdInline(t) {
+  let h = esc(t); const codes = [];
+  h = h.replace(/`([^`\n]+)`/g, (_, c) => `\u0000${codes.push(c) - 1}\u0000`);
+  h = h.replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>').replace(/__([^_\n]+?)__/g, '<strong>$1</strong>')
+       .replace(/(^|[^*\w])\*([^*\s][^*\n]*?)\*(?![*\w])/g, '$1<em>$2</em>')
+       .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  return h.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${codes[i]}</code>`);
+}
+const isTableRow = l => /^\s*\|.*\|\s*$/.test(l), isSep = l => /^\s*\|[\s:|-]+\|\s*$/.test(l);
+const LI = /^\s*(?:[-*•]|\d+[.)])\s+/;
+function md(src) {
+  const lines = String(src).replace(/\r/g, '').split('\n'), out = [];
+  for (let i = 0; i < lines.length;) {
+    const L = lines[i];
+    if (/^\s*```/.test(L)) { // bloco de código; sem fechamento (texto truncado) vai até o fim
+      const code = []; i++;
+      while (i < lines.length && !/^\s*```/.test(lines[i])) code.push(lines[i++]);
+      i++; out.push(`<pre><code>${esc(code.join('\n'))}</code></pre>`);
+    } else if (!L.trim()) { i++; }
+    else if (/^\s*#{1,6}\s+/.test(L)) { out.push(`<div class="h">${mdInline(L.replace(/^\s*#{1,6}\s+/, ''))}</div>`); i++; }
+    else if (isTableRow(L)) {
+      const rows = []; while (i < lines.length && isTableRow(lines[i])) rows.push(lines[i++]);
+      const cells = r => r.trim().replace(/^\||\|$/g, '').split('|').map(c => mdInline(c.trim()));
+      const head = rows.length > 1 && isSep(rows[1]), body = rows.filter((r, k) => !isSep(r) && !(head && k === 0));
+      out.push(`<table>${head ? `<thead><tr>${cells(rows[0]).map(c => `<th>${c}</th>`).join('')}</tr></thead>` : ''}<tbody>${body.map(r => `<tr>${cells(r).map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`);
+    } else if (LI.test(L)) {
+      const ordered = /^\s*\d/.test(L), items = [];
+      while (i < lines.length && LI.test(lines[i])) items.push(lines[i++].replace(LI, ''));
+      const tag = ordered ? 'ol' : 'ul'; out.push(`<${tag}>${items.map(x => `<li>${mdInline(x)}</li>`).join('')}</${tag}>`);
+    } else {
+      const para = [];
+      while (i < lines.length && lines[i].trim() && !/^\s*(```|#{1,6}\s)/.test(lines[i]) && !LI.test(lines[i]) && !isTableRow(lines[i])) para.push(lines[i++]);
+      out.push(`<p>${para.map(mdInline).join('<br>')}</p>`);
+    }
+  }
+  return out.join('');
+}
+// Tags que o Claude Code coloca nas mensagens (<task-notification>, <system-reminder>…) viram cartões rotulados.
+const TAG_LABEL = { 'task-notification': 'Notificação de tarefa', 'system-reminder': 'Lembrete do sistema', 'command-name': 'Comando', 'command-message': 'Comando', 'command-args': 'Argumentos', 'local-command-stdout': 'Saída do comando', 'local-command-caveat': 'Aviso', 'user-prompt-submit-hook': 'Hook', 'summary': 'Resumo', 'status': 'Status', 'result': 'Resultado', 'task-id': 'Tarefa', 'tool-use-id': 'Ferramenta', 'output-file': 'Arquivo', 'usage': 'Uso', 'total_tokens': 'Tokens', 'tool_uses': 'Chamadas', 'duration_ms': 'Duração' };
+const QUIET_TAGS = new Set(['system-reminder', 'local-command-caveat', 'user-prompt-submit-hook', 'local-command-stdout']);
+const tagLabel = t => TAG_LABEL[t] || t.replace(/[-_]/g, ' ').replace(/^./, c => c.toUpperCase());
+const STATUS_CLASS = { completed: 'ok', done: 'ok', success: 'ok', failed: 'bad', error: 'bad', killed: 'bad', running: 'run', pending: 'run' };
+function richText(text, depth = 0) {
+  const out = []; let rest = String(text);
+  for (;;) {
+    const open = /<([a-z][\w-]*)>/.exec(rest);
+    if (!open) break;
+    const [m, tag] = open, from = open.index + m.length, close = rest.indexOf(`</${tag}>`, from);
+    const inner = close < 0 ? rest.slice(from) : rest.slice(from, close); // truncado: leva o resto
+    if (open.index) out.push(md(rest.slice(0, open.index)));
+    out.push(tagCard(tag, inner.trim(), depth));
+    rest = close < 0 ? '' : rest.slice(close + tag.length + 3);
+  }
+  if (rest.trim()) out.push(md(rest));
+  return out.join('');
+}
+function tagCard(tag, inner, depth) {
+  if (!inner) return '';
+  const kids = depth < 3 && /<[a-z][\w-]*>/.test(inner);
+  let body;
+  if (kids) {
+    const rows = []; let rest = inner;
+    for (;;) {
+      const o = /<([a-z][\w-]*)>/.exec(rest); if (!o) break;
+      const from = o.index + o[0].length, c = rest.indexOf(`</${o[1]}>`, from), v = (c < 0 ? rest.slice(from) : rest.slice(from, c)).trim();
+      if (o.index && rest.slice(0, o.index).trim()) rows.push(`<div class="md">${md(rest.slice(0, o.index))}</div>`);
+      const val = o[1] === 'status' ? `<span class="st ${STATUS_CLASS[v.toLowerCase()] || ''}">${esc(v)}</span>` : /<[a-z][\w-]*>/.test(v) ? richText(v, depth + 1) : `<span class="md">${md(v)}</span>`;
+      rows.push(`<div class="kv"><b>${esc(tagLabel(o[1]))}</b><div>${val}</div></div>`);
+      rest = c < 0 ? '' : rest.slice(c + o[1].length + 3);
+    }
+    if (rest.trim()) rows.push(`<div class="md">${md(rest)}</div>`);
+    body = rows.join('');
+  } else body = `<div class="md">${md(inner)}</div>`;
+  const quiet = QUIET_TAGS.has(tag);
+  return `<div class="xml${quiet ? ' quiet' : ''}"><div class="xh">${esc(tagLabel(tag))}</div><div class="xb">${body}</div></div>`;
+}
+// Uma linha de texto puro (listas, balões, Arena): tira o markdown e as tags.
+function plain(t) {
+  let s = String(t ?? '');
+  const sm = /<summary>([\s\S]*?)<\/summary>/.exec(s);
+  if (sm && s.includes('<task-notification>')) s = sm[1];
+  return s.replace(/```[\s\S]*?(```|$)/g, ' ').replace(/<\/?[a-z][\w-]*>/g, ' ').replace(/`([^`]*)`/g, '$1')
+    .replace(/\*\*([^*]+)\*\*/g, '$1').replace(/__([^_]+)__/g, '$1').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/^\s*#{1,6}\s+/gm, '').replace(/^\s*[-*•]\s+/gm, '').replace(/\s+/g, ' ').trim();
+}
 function feedItems(lines) {
   const out = [];
   for (const l of lines) {
     let e; try { e = JSON.parse(l); } catch { continue; }
     for (const b of blocks(e)) {
       const who = b.role === 'user' ? 'user' : 'text', ts = e.timestamp ? new Date(e.timestamp).toLocaleTimeString('pt-BR') : '';
-      if (b.type === 'text' && b.text?.trim()) out.push({ k: who, s: brief(b.text.trim(), 600), ts });
-      else if (b.type === 'tool_use') out.push({ k: 'tool', s: `${b.name}  ${summarize(b.input)}`, ts });
+      if (b.type === 'text' && b.text?.trim()) out.push({ k: who, rich: true, s: brief(b.text.trim(), 2500), ts });
+      else if (b.type === 'tool_use') out.push({ k: 'tool', name: b.name, s: summarize(b.input), ts });
       else if (b.type === 'tool_result') out.push({ k: 'result', s: brief((typeof b.content === 'string' ? b.content : Array.isArray(b.content) ? b.content.map(x => x.text || '').join(' ') : '').trim(), 200), ts });
     }
   }
@@ -646,12 +751,12 @@ function feedItems(lines) {
 }
 function activityTab(r) {
   if (!r.a || !r.a.found) return '<div class="empty">Nenhuma transcrição do Claude encontrada para este worktree.</div>';
-  return `<div class="feed">${feedItems(r.a.lines).map(i => `<div class="it ${i.k}"><span class="k">${LABEL[i.k]}</span>${esc(i.s)}${i.ts ? `<time>${i.ts}</time>` : ''}</div>`).join('') || 'Sessão sem atividade recente.'}</div>`;
+  return `<div class="feed">${feedItems(r.a.lines).map(i => `<div class="it ${i.k}"><span class="k">${LABEL[i.k]}</span>${i.ts ? `<time>${i.ts}</time>` : ''}${i.name ? `<span class="body"><span class="tn">${esc(i.name)}</span><code class="mono" style="font-size:12px">${esc(i.s)}</code></span>` : i.rich ? `<div class="body md">${richText(i.s)}</div>` : `<span class="body">${esc(i.s)}</span>`}</div>`).join('') || 'Sessão sem atividade recente.'}</div>`;
 }
 function overviewTab(r) {
   const g = r.g, c = r.st === 'hot' ? 'var(--hot)' : 'var(--work)';
   const card = (l, v, extra = '') => `<div class="card"><div class="faint" style="font-size:12.5px">${l}</div><div style="font-size:22px;font-weight:600;letter-spacing:-.02em;margin-top:4px">${v}</div>${extra}</div>`;
-  return `<div class="grid2">${card('CPU', g.cpu.toFixed(0) + '%', spark(hist[g.path] || [], 240, 32, c, Math.max(100, ...(hist[g.path] || [0]))))}${card('Memória', fmtB(g.rss), spark(memHist[g.path] || [], 240, 32, 'var(--muted)', Math.max(1e8, ...(memHist[g.path] || [0]))))}${card('Fila de CPU', typeof g.wait === 'number' ? g.wait.toFixed(0) + '%' : '—', `<div class="faint" style="font-size:12px;margin-top:4px">${typeof g.waiting === 'number' ? '≈' + g.waiting.toFixed(1) + ' cores esperando' : ''}</div>`)}${card('Processos', g.nproc + ' · ' + g.threads + ' threads')}</div>
+  return `<div class="grid2">${card('CPU', fmtPct(g), `<div class="faint" style="font-size:12px;margin-top:4px">${fmtN(g)} de ${data.cores.length} cores</div>` + spark(hist[g.path] || [], 240, 32, c, Math.max(100, ...(hist[g.path] || [0]))))}${card('Memória', fmtB(g.rss), spark(memHist[g.path] || [], 240, 32, 'var(--muted)', Math.max(1e8, ...(memHist[g.path] || [0]))))}${card('Fila de CPU', typeof g.wait === 'number' ? g.wait.toFixed(0) + '%' : '—', `<div class="faint" style="font-size:12px;margin-top:4px">${typeof g.waiting === 'number' ? '≈' + g.waiting.toFixed(1) + ' cores esperando' : ''}</div>`)}${card('Processos', g.nproc + ' · ' + g.threads + ' threads')}</div>
     <div class="muted" style="font-size:13px">Afinidade: <span class="mono">${esc(g.aff.join(' | ') || '—')}</span> · cores ativos: <span class="mono">${g.cores_in_use.join(', ') || '—'}</span></div>`;
 }
 function prioTab(r) {
@@ -700,6 +805,7 @@ let lastDone = {};
 function render(d) {
   data = d;
   const n = d.cores.length, fun = mode === 'fun';
+  $('cpuhead').textContent = `CPU (% de ${n} cores)`; $('cpuhead').title = `100% = todos os ${n} cores da máquina`;
   $('root').textContent = d.root.replace(/^\/home\/[^/]+/, '~');
   $('live').textContent = 'Ao vivo · 1 s';
   lastDone = {}; d.events.forEach(e => { if (!(e.path in lastDone)) lastDone[e.path] = e; });
@@ -731,8 +837,8 @@ function render(d) {
       kpi('Memória', (usedMem / 1e9).toFixed(1), `de ${(d.mem.total / 1e9).toFixed(0)} GB`, `${fmtB(d.mem.avail)} livres`, kHist.mem, 'var(--muted)', usedPct.toFixed(0) + '%') +
       kpi('Pressão de CPU', d.psi && d.psi.cpu != null ? d.psi.cpu.toFixed(0) : '—', '%', d.psi && d.psi.cpu != null ? `tempo com tarefas na fila · memória ${d.psi.mem.toFixed(0)}%` : 'sem PSI neste kernel', kHist.psi, d.psi && d.psi.cpu >= 25 ? 'var(--wait)' : 'var(--muted)') +
       kpi('Tarefas hoje', today, '', d.events[0] ? `última ${ago(d.events[0].t)}` : 'nenhuma ainda', kHist.tasks, 'var(--work)'));
-    setHTML($('events'), d.events.length ? d.events.slice(0, 5).map(e => `<div class="li"><div class="h"><b style="font-weight:500">${esc(e.name)}</b><span class="faint">${ago(e.t)}</span></div><p>${esc(e.msg.slice(0, 160) || 'Tarefa concluída')}</p></div>`).join('') : '<div class="li faint">aguardando a conclusão de uma tarefa…</div>');
-    $('thr').textContent = `· CPU ≥ ${d.cfg.cpu_pct}% · mem ≥ ${(d.cfg.mem_bytes / 1e9).toFixed(1)} GB · fila ≥ ${d.cfg.wait_pct}%`;
+    setHTML($('events'), d.events.length ? d.events.slice(0, 5).map(e => `<div class="li"><div class="h"><b style="font-weight:500">${esc(e.name)}</b><span class="faint">${ago(e.t)}</span></div><p>${esc(plain(e.msg).slice(0, 160) || 'Tarefa concluída')}</p></div>`).join('') : '<div class="li faint">aguardando a conclusão de uma tarefa…</div>');
+    $('thr').textContent = `· CPU ≥ ${(d.cfg.cpu_pct / n).toFixed(0)}% · mem ≥ ${(d.cfg.mem_bytes / 1e9).toFixed(1)} GB · fila ≥ ${d.cfg.wait_pct}%`;
     setHTML($('alerts'), d.alerts.length ? d.alerts.map(a => `<div class="li" style="display:flex;gap:10px"><span class="dot" style="background:var(--hot);margin-top:7px"></span><div><div style="font-weight:500">${esc(a.msg)}</div><div class="faint">${clock(a.t)}</div></div></div>`).join('') : '<div class="li faint">nenhum alerta disparado</div>');
     setHTML($('cores'), d.cores.map((u, i) => `<i title="core ${i}: ${u.toFixed(0)}%" style="background:color-mix(in srgb,${u > 85 ? 'var(--hot)' : u > 60 ? 'var(--wait)' : 'var(--work)'} ${Math.max(12, Math.round(u))}%,var(--border))"></i>`).join(''));
     sync($('rows'), shown, makeRow, updateRow);
