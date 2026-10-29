@@ -81,7 +81,7 @@ O script é copiado para `~/.local/bin/wt-agent-hook` e um hook `Stop` é adicio
 
 ## Configuração
 
-Linha de comando: `wt-monitor [raiz=~/dev] [porta=8765]` (ou `ROOT=`/`PORT=` com `make`). Os limites de alerta são variáveis de ambiente (use `Environment=` na unit do systemd):
+Linha de comando: `wt-monitor [raiz=~/dev] [porta=8765] [--terminals]` (ou `ROOT=`/`PORT=`/`TERMINALS=1` com `make`). `wt-monitor --print-token` imprime o token de autorização dos terminais (criando-o se preciso) e sai. As configurações são variáveis de ambiente (use `Environment=` na unit do systemd):
 
 | Variável | Padrão | Significado |
 |---|---|---|
@@ -89,10 +89,12 @@ Linha de comando: `wt-monitor [raiz=~/dev] [porta=8765]` (ou `ROOT=`/`PORT=` com
 | `WT_CPU_SECS` | `20` | Segundos acima do limite de CPU antes de alertar |
 | `WT_MEM_GB` | `4` | Limite de memória por worktree (soma do RSS) |
 | `WT_SYS_MEM_PCT` | `90` | Limite de uso de memória do sistema |
+| `WT_TERMINALS` | _(desligado)_ | `1` habilita os terminais, igual a `--terminals` |
+| `WT_TOKEN_FILE` | `$XDG_CONFIG_HOME/wt-monitor/token`, senão `~/.config/wt-monitor/token` | Onde fica o token dos terminais (modo `0600`) |
 
 Cada alerta dispara uma vez, rearma quando o valor volta ao normal e espera pelo menos 2 minutos antes de repetir. O hook respeita `WT_PORT` se você mudou a porta.
 
-Parâmetros de URL: `?mode=sober|fun`, `?theme=dark|light`, `?demo` e, com `?demo`, também `?open=<nome do worktree>&tab=agents|activity|procs|overview`.
+Parâmetros de URL: `?mode=sober|fun|term` (`term` só com os terminais habilitados), `?theme=dark|light`, `?layout=1|2|4` (painéis de terminal lado a lado), `?demo` e, com `?demo`, também `?open=<nome do worktree>&tab=agents|activity|procs|overview`; `?demo&mode=term&layout=4` mostra terminais simulados.
 
 ## Terminais (opt-in)
 
@@ -170,4 +172,4 @@ Só Linux. Os terminais executam o seu shell de login e são limitados a 16; nã
 
 ## Contribuir e licença
 
-PRs são bem-vindos — veja o [CONTRIBUTING.md](CONTRIBUTING.md). Licença [MIT](LICENSE).
+PRs são bem-vindos — veja o [CONTRIBUTING.md](CONTRIBUTING.md). Licença [MIT](LICENSE). As mudanças estão no [CHANGELOG](CHANGELOG.md); o código de terceiros que embutimos (xterm.js) está em [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

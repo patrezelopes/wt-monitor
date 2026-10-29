@@ -81,7 +81,7 @@ It copies the script to `~/.local/bin/wt-agent-hook` and adds a `Stop` hook to e
 
 ## Configuration
 
-Command line: `wt-monitor [root=~/dev] [port=8765]` (or `ROOT=`/`PORT=` with `make`). Alert thresholds are environment variables (set them with `Environment=` in the systemd unit):
+Command line: `wt-monitor [root=~/dev] [port=8765] [--terminals]` (or `ROOT=`/`PORT=`/`TERMINALS=1` with `make`). `wt-monitor --print-token` prints the terminals' authorisation token (creating it if needed) and exits. Settings are environment variables (set them with `Environment=` in the systemd unit):
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -89,10 +89,12 @@ Command line: `wt-monitor [root=~/dev] [port=8765]` (or `ROOT=`/`PORT=` with `ma
 | `WT_CPU_SECS` | `20` | Seconds above the CPU threshold before alerting |
 | `WT_MEM_GB` | `4` | Worktree memory alert threshold (sum of RSS) |
 | `WT_SYS_MEM_PCT` | `90` | System memory usage alert threshold |
+| `WT_TERMINALS` | _(off)_ | `1` enables terminals, same as `--terminals` |
+| `WT_TOKEN_FILE` | `$XDG_CONFIG_HOME/wt-monitor/token`, else `~/.config/wt-monitor/token` | Where the terminals' token is kept (mode `0600`) |
 
 Each alert fires once, re-arms when the value returns to normal, and waits at least 2 minutes before repeating. The hook honours `WT_PORT` if you changed the port.
 
-URL parameters: `?mode=sober|fun`, `?theme=dark|light`, `?demo`, and with `?demo` also `?open=<worktree name>&tab=agents|activity|procs|overview`.
+URL parameters: `?mode=sober|fun|term` (`term` only when terminals are enabled), `?theme=dark|light`, `?layout=1|2|4` (terminal panes side by side), `?demo`, and with `?demo` also `?open=<worktree name>&tab=agents|activity|procs|overview`; `?demo&mode=term&layout=4` shows simulated terminals.
 
 ## Terminals (opt-in)
 
@@ -170,4 +172,4 @@ Linux only. Terminals run your login shell and are limited to 16; they do not at
 
 ## Contributing & license
 
-PRs welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Licensed under the [MIT License](LICENSE).
+PRs welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Licensed under the [MIT License](LICENSE). Changes are listed in the [CHANGELOG](CHANGELOG.md); the third-party code we embed (xterm.js) is covered in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
