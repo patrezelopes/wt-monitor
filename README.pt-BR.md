@@ -107,7 +107,8 @@ O painel pode abrir terminais por conta própria. Isso vem **desligado por padr�
 
 ```bash
 make run TERMINALS=1          # ou: wt-monitor --terminals   (WT_TERMINALS=1 também funciona)
-make install TERMINALS=1      # o mesmo, como serviço de usuário do systemd
+make install                  # como serviço de usuário do systemd: terminais e controle vêm LIGADOS por padrão
+make install TERMINALS=       # igual, sem os terminais (CONTROL= desliga o controle)
 make open-terminals           # abre o painel com o token de uso único no link
 ```
 
@@ -164,7 +165,7 @@ Duas partes, com riscos bem diferentes:
 
 ```bash
 make run CONTROL=1        # ou: wt-monitor --control   (WT_CONTROL=1 também funciona)
-make install CONTROL=1    # como serviço de usuário do systemd (junte TERMINALS=1 para manter os terminais)
+make install              # o serviço já vem com ele LIGADO (CONTROL= desliga)
 make open-control         # o mesmo link com token dos terminais
 ```
 

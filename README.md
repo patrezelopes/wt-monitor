@@ -107,7 +107,8 @@ The dashboard can run terminals itself. This is **off by default**: it lets a we
 
 ```bash
 make run TERMINALS=1          # or: wt-monitor --terminals   (WT_TERMINALS=1 also works)
-make install TERMINALS=1      # same, as the systemd user service
+make install                  # as the systemd user service: terminals and priority control are ON by default
+make install TERMINALS=       # same, without terminals (CONTROL= turns the control off)
 make open-terminals           # opens the dashboard with the one-time token in the link
 ```
 
@@ -164,7 +165,7 @@ Two parts, with very different risk:
 
 ```bash
 make run CONTROL=1        # or: wt-monitor --control   (WT_CONTROL=1 also works)
-make install CONTROL=1    # as the systemd user service (add TERMINALS=1 to keep terminals)
+make install              # the service has it ON by default (CONTROL= turns it off)
 make open-control         # same one-time token link as the terminals
 ```
 

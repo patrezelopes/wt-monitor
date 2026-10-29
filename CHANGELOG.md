@@ -13,6 +13,7 @@ All notable changes to this project are documented here. The format follows
 - `make open-control`, `scripts/e2e-control.mjs` (moves real processes between cgroups and checks that high priority wins a shared core) and browser tests for the Priority tab.
 
 ### Changed
+- **`make install` now enables terminals and priority control by default.** Pass `TERMINALS=` and/or `CONTROL=` (empty) to install without them. `make run` is unchanged (both off unless asked).
 - The session drawer header no longer wraps the close button on long worktree names.
 
 ## [0.3.1] - 2026-10-29

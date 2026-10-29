@@ -12,10 +12,12 @@ SERVICE  := wt-monitor.service
 # Claude Code config dirs for `make hooks` (default: ~/.claude and every ~/.claude-*)
 CONFIG_DIRS ?=
 # Set TERMINALS=1 to let the dashboard open terminals (opt-in; see SECURITY.md)
-TERMINALS ?=
 # Set CONTROL=1 to let the dashboard change CPU/memory priority per worktree via cgroups (opt-in; see SECURITY.md)
-CONTROL ?=
 FLAGS := $(if $(TERMINALS), --terminals)$(if $(CONTROL), --control)
+# `make install` turns both opt-in features ON unless you pass TERMINALS= and/or CONTROL= (empty) to turn them off
+INSTALL_TERMINALS = $(if $(filter undefined,$(origin TERMINALS)),1,$(TERMINALS))
+INSTALL_CONTROL   = $(if $(filter undefined,$(origin CONTROL)),1,$(CONTROL))
+INSTALL_FLAGS     = $(if $(INSTALL_TERMINALS), --terminals)$(if $(INSTALL_CONTROL), --control)
 
 .DEFAULT_GOAL := help
 .PHONY: help build run open open-terminals open-control test fmt fmt-check lint js-check check e2e \
@@ -68,18 +70,19 @@ e2e: build ## End-to-end tests: terminals, priority control (real cgroups) and a
 
 # ---- systemd user service ---------------------------------------------------
 
-install: build ## Build, install to PREFIX/bin and enable+start the user service
+install: build ## Build, install and enable+start the user service (terminals+control ON; TERMINALS= CONTROL= to turn off)
 	install -d $(BIN) $(UNIT_DIR)
 	install -m755 target/release/wt-monitor $(BIN)/wt-monitor.new
 	mv $(BIN)/wt-monitor.new $(BIN)/wt-monitor
-	sed -e 's|@BIN@|$(BIN)|' -e 's|@ROOT@|$(ROOT)|' -e 's|@PORT@|$(PORT)|' -e 's|@FLAGS@|$(FLAGS)|' contrib/$(SERVICE).in > $(UNIT_DIR)/$(SERVICE)
+	sed -e 's|@BIN@|$(BIN)|' -e 's|@ROOT@|$(ROOT)|' -e 's|@PORT@|$(PORT)|' -e 's|@FLAGS@|$(INSTALL_FLAGS)|' contrib/$(SERVICE).in > $(UNIT_DIR)/$(SERVICE)
 	systemctl --user daemon-reload
 	systemctl --user enable $(SERVICE)
 	systemctl --user restart $(SERVICE)
 	@echo "wt-monitor running at http://127.0.0.1:$(PORT) (watching $(ROOT))"
 	@echo "Agent notifications: make hooks   |   start before login: make linger"
-	@if [ -n "$(TERMINALS)$(CONTROL)" ]; then echo "Opt-in features ENABLED. Open once with: make open-terminals (the token is shared)"; fi
-	@if [ -n "$(CONTROL)" ]; then echo "Priority control is ON: restarting the service resets every priority to normal."; fi
+	@if [ -n "$(INSTALL_TERMINALS)$(INSTALL_CONTROL)" ]; then echo "Opt-in features ENABLED:$(INSTALL_FLAGS). Open once with: make open-terminals (the token is shared)"; fi
+	@if [ -n "$(INSTALL_CONTROL)" ]; then echo "Priority control is ON: restarting the service resets every priority to normal."; fi
+	@echo "To install without them: make install TERMINALS= CONTROL="
 
 uninstall: ## Stop and remove the service and binary (hooks: make hooks-uninstall)
 	-systemctl --user disable --now $(SERVICE)
