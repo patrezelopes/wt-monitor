@@ -6,8 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-29
+
 ### Added
 - README section "How is this different?" positioning wt-monitor as a lightweight observer next to workspace and orchestrator tools.
+
+### Documentation
+- The README now documents `--print-token`, `WT_TERMINALS`, `WT_TOKEN_FILE`, the `mode=term` and `layout` URL parameters, and links the changelog and the third-party notices.
 
 ### Fixed
 - The `Makefile` finds `cargo` in `~/.cargo/bin`, so `make` works from shells where rustup's directory is not on `PATH`.
@@ -53,7 +58,8 @@ All notable changes to this project are documented here. The format follows
 ### Added
 - Initial release: per-worktree CPU, memory, threads and CPU affinity from `/proc`; alerts with desktop notifications; Claude Code `Stop` hook for "task finished" events; session preview; pins; playful view; systemd user service.
 
-[Unreleased]: https://github.com/patrezelopes/wt-monitor/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/patrezelopes/wt-monitor/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/patrezelopes/wt-monitor/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/patrezelopes/wt-monitor/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/patrezelopes/wt-monitor/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/patrezelopes/wt-monitor/releases/tag/v0.1.0
