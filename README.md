@@ -6,20 +6,23 @@ Single static binary, **zero dependencies** (Rust standard library only), Linux 
 
 > 🇧🇷 [Leia em português](README.pt-BR.md)
 
-| Sober view | Playful view |
+| Overview (dark) | Overview (light) |
 |---|---|
-| ![sober](docs/img/sober.png) | ![playful](docs/img/fun.png) |
+| ![overview](docs/img/overview.png) | ![overview, light](docs/img/overview-light.png) |
+
+| Session detail: agents, skill and who is talking to whom | Arena (the playful view) |
+|---|---|
+| ![session](docs/img/session.png) | ![arena](docs/img/arena.png) |
 
 ## Features
 
-- **Per-worktree view** – processes are grouped by the nearest directory containing `.git` (a file in linked worktrees, a folder in normal repos). CPU %, memory, threads, CPU affinity, the core each process last ran on, and 60 s history charts.
-- **Session preview** – click a worktree to open a drawer with its processes and the live activity feed of the latest Claude Code session in it (prompts, agent messages, tool calls and results).
-- **Two looks, one switch** – a sober dashboard, and a playful one where each worktree is a little robot: it types when busy, sleeps when idle, celebrates when a task finishes, sweats when over a limit, and earns XP/levels per completed task. Respects `prefers-reduced-motion`.
-- **Pins** – ★ the worktrees you care about; they stay on top (even with no running processes) and a "pinned only" filter hides the rest.
+- **Per-worktree view** – processes are grouped by the nearest directory containing `.git` (a file in linked worktrees, a folder in normal repos). Branch, status, CPU %, memory, threads, CPU affinity, and 60 s history charts.
+- **Agents, skills and sub-agents** – for Claude Code worktrees it shows which agents are running (the main agent plus each running sub-agent with its type and model), the **skill** in use, the tool each sub-agent is on, and **who is talking to whom** (delegations, `SendMessage`, completions). A status is derived for each worktree: *working*, *waiting for you*, *idle* or *at the limit* (see [How status is derived](docs/architecture.md#status)).
+- **Session detail** – click a worktree to open a drawer with tabs: overview, agents (topology + conversation between agents), live activity feed (prompts, agent messages, tool calls, results) and processes.
+- **Two looks, one switch** – *Overview*, a dense table in the style of modern dashboards (dark and light, follows your system), and *Arena*, where each worktree is a small robot with its sub-agents wired to it and message packets travelling between them. It types when busy, sleeps when idle, celebrates when a task finishes, and earns XP/levels. Respects `prefers-reduced-motion`.
+- **Filters, search and pins** – filter by status, search by worktree, branch, agent or skill (`Ctrl K`), and ★ pin the worktrees you care about; they stay on top even with no running processes.
 - **Desktop notifications** (via `notify-send`) for high CPU / memory in a worktree, high system memory, and **when an agent finishes a task**, including its last message.
 - **Per-core CPU bars**, system memory and load.
-
-![preview drawer](docs/img/preview.png)
 
 ## Quick start
 
@@ -71,7 +74,7 @@ Command line: `wt-monitor [root=~/dev] [port=8765]` (or `ROOT=`/`PORT=` with `ma
 
 Each alert fires once, re-arms when the value returns to normal, and waits at least 2 minutes before repeating. The hook honours `WT_PORT` if you changed the port.
 
-URL parameters: `?mode=sober|fun`, `?demo`, `?open=<worktree name>` (with `?demo`).
+URL parameters: `?mode=sober|fun`, `?theme=dark|light`, `?demo`, and with `?demo` also `?open=<worktree name>&tab=agents|activity|procs|overview`.
 
 ## Make targets
 
@@ -113,7 +116,7 @@ Build tools size their worker pools from the machine's CPU count, not from affin
 
 - Listens on **127.0.0.1 only** and rejects any `Host` header other than `127.0.0.1:<port>` / `localhost:<port>` (DNS-rebinding protection).
 - `POST /event` requires the custom header `X-WT: 1`, which forces a CORS preflight, so other web pages in your browser cannot inject fake events.
-- The preview reads Claude Code transcripts under `~/.claude*/projects/` **only for worktrees inside the watched root**; the requested path is validated and never used to read arbitrary files. Transcripts can contain sensitive content — the preview is as private as your loopback interface.
+- The preview and agent views read Claude Code transcripts (and sub-agent transcripts) under `~/.claude*/projects/` **only for worktrees inside the watched root**; the requested path is validated and never used to read arbitrary files. Transcripts can contain sensitive content — the preview is as private as your loopback interface.
 - Pins and XP are stored in your browser's `localStorage`; nothing is sent anywhere.
 - Per-process details come from `/proc/<pid>/{cwd,stat,status,cmdline}`, so you only see processes you are allowed to inspect (your own).
 
@@ -123,7 +126,7 @@ See [docs/architecture.md](docs/architecture.md).
 
 ## Limitations
 
-Linux only. Memory is the sum of RSS, so pages shared between processes are counted more than once. Task detection relies on Claude Code's `Stop` hook, which fires after *every* completed response, not only long tasks.
+Linux only. Memory is the sum of RSS, so pages shared between processes are counted more than once. Task detection relies on Claude Code's `Stop` hook, which fires after *every* completed response, not only long tasks. Agent, skill and *waiting for you* detection is **inferred from the transcript files** (their format is not a stable API) and is a best-effort heuristic. The UI uses Inter / JetBrains Mono when installed and falls back to system fonts; it makes no network requests.
 
 ## Contributing & license
 

@@ -6,20 +6,23 @@ Um único binário, **sem dependências** (só a biblioteca padrão do Rust), s�
 
 > 🇬🇧 [Read in English](README.md)
 
-| Visual sóbrio | Visual divertido |
+| Visão geral (escuro) | Visão geral (claro) |
 |---|---|
-| ![sóbrio](docs/img/sober.png) | ![divertido](docs/img/fun.png) |
+| ![visão geral](docs/img/overview.png) | ![visão geral, claro](docs/img/overview-light.png) |
+
+| Detalhe da sessão: agentes, skill e quem fala com quem | Arena (o visual divertido) |
+|---|---|
+| ![sessão](docs/img/session.png) | ![arena](docs/img/arena.png) |
 
 ## Recursos
 
-- **Visão por worktree** – os processos são agrupados pelo diretório mais próximo que contém `.git` (arquivo nos worktrees ligados, pasta nos repositórios normais). CPU %, memória, threads, afinidade, o core em que cada processo rodou por último e gráficos de 60 s.
-- **Preview da sessão** – clique num worktree para abrir uma gaveta com os processos e o feed ao vivo da sessão mais recente do Claude Code nele (pedidos, mensagens do agente, chamadas de ferramenta e resultados).
-- **Dois visuais, um botão** – um painel sóbrio e um divertido em que cada worktree é um robozinho: digita quando está ocupado, dorme quando está parado, comemora quando termina uma tarefa, transpira quando passa de um limite e ganha XP/níveis a cada tarefa concluída. Respeita `prefers-reduced-motion`.
-- **Fixados** – marque com ★ os worktrees que importam; eles ficam no topo (mesmo sem processos) e o filtro "só fixados" esconde o resto.
+- **Visão por worktree** – os processos são agrupados pelo diretório mais próximo que contém `.git` (arquivo nos worktrees ligados, pasta nos repositórios normais). Branch, status, CPU %, memória, threads, afinidade e gráficos de 60 s.
+- **Agentes, skills e subagentes** – nos worktrees com Claude Code mostra quais agentes estão rodando (o principal e cada subagente em execução, com tipo e modelo), a **skill** em uso, a ferramenta em que cada subagente está e **quem fala com quem** (delegações, `SendMessage`, conclusões). Cada worktree recebe um status derivado: *trabalhando*, *aguardando você*, *ocioso* ou *no limite* (veja [Como o status é derivado](docs/architecture.md#status)).
+- **Detalhe da sessão** – clique num worktree para abrir uma gaveta com abas: visão geral, agentes (topologia + conversa entre agentes), feed de atividade ao vivo (pedidos, mensagens do agente, ferramentas e resultados) e processos.
+- **Dois visuais, um botão** – *Visão geral*, uma tabela densa no estilo dos painéis modernos (escuro e claro, segue o sistema), e *Arena*, em que cada worktree é um robozinho com seus subagentes ligados a ele e pacotes de mensagem viajando entre eles. Digita quando está ocupado, dorme quando está parado, comemora ao terminar uma tarefa e ganha XP/níveis. Respeita `prefers-reduced-motion`.
+- **Filtros, busca e fixados** – filtre por status, busque por worktree, branch, agente ou skill (`Ctrl K`) e marque com ★ os worktrees que importam; eles ficam no topo mesmo sem processos.
 - **Notificações do desktop** (via `notify-send`) para CPU/memória altas em um worktree, memória alta do sistema e **quando um agente termina uma tarefa**, com a última mensagem dele.
 - **Barras de CPU por core**, memória do sistema e load.
-
-![gaveta de preview](docs/img/preview.png)
 
 ## Início rápido
 
@@ -71,7 +74,7 @@ Linha de comando: `wt-monitor [raiz=~/dev] [porta=8765]` (ou `ROOT=`/`PORT=` com
 
 Cada alerta dispara uma vez, rearma quando o valor volta ao normal e espera pelo menos 2 minutos antes de repetir. O hook respeita `WT_PORT` se você mudou a porta.
 
-Parâmetros de URL: `?mode=sober|fun`, `?demo`, `?open=<nome do worktree>` (com `?demo`).
+Parâmetros de URL: `?mode=sober|fun`, `?theme=dark|light`, `?demo` e, com `?demo`, também `?open=<nome do worktree>&tab=agents|activity|procs|overview`.
 
 ## Alvos do make
 
@@ -113,7 +116,7 @@ Ferramentas de build dimensionam seus workers pelo total de CPUs da máquina, n�
 
 - Escuta **somente em 127.0.0.1** e rejeita qualquer cabeçalho `Host` diferente de `127.0.0.1:<porta>` / `localhost:<porta>` (proteção contra DNS rebinding).
 - `POST /event` exige o cabeçalho `X-WT: 1`, que força um preflight de CORS; outras páginas abertas no navegador não conseguem injetar eventos falsos.
-- O preview lê as transcrições do Claude Code em `~/.claude*/projects/` **apenas de worktrees dentro da raiz monitorada**; o caminho pedido é validado e nunca vira leitura de arquivo arbitrário. Transcrições podem ter conteúdo sensível — o preview é tão privado quanto a sua interface de loopback.
+- O preview e as telas de agentes leem as transcrições do Claude Code (e as dos subagentes) em `~/.claude*/projects/` **apenas de worktrees dentro da raiz monitorada**; o caminho pedido é validado e nunca vira leitura de arquivo arbitrário. Transcrições podem ter conteúdo sensível — o preview é tão privado quanto a sua interface de loopback.
 - Fixados e XP ficam no `localStorage` do navegador; nada é enviado para fora.
 - Os detalhes vêm de `/proc/<pid>/{cwd,stat,status,cmdline}`; você só vê os processos que tem permissão de inspecionar (os seus).
 
@@ -123,7 +126,7 @@ Veja [docs/architecture.md](docs/architecture.md).
 
 ## Limitações
 
-Só Linux. A memória é a soma do RSS, então páginas compartilhadas entre processos são contadas mais de uma vez. A detecção de tarefas usa o hook `Stop` do Claude Code, que dispara após *toda* resposta concluída, não só em tarefas longas.
+Só Linux. A memória é a soma do RSS, então páginas compartilhadas entre processos são contadas mais de uma vez. A detecção de tarefas usa o hook `Stop` do Claude Code, que dispara após *toda* resposta concluída, não só em tarefas longas. A detecção de agentes, skills e *aguardando você* é **inferida dos arquivos de transcrição** (o formato não é uma API estável) e é uma heurística de melhor esforço. A interface usa Inter / JetBrains Mono quando instaladas e cai para as fontes do sistema; não faz nenhuma requisição de rede.
 
 ## Contribuir e licença
 

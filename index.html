@@ -3,172 +3,216 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Painel de Worktrees</title>
+<title>wt-monitor</title>
 <style>
-  :root { --bg:#f6f7f9; --card:#fff; --fg:#1b1f24; --mute:#6b7280; --line:#e5e7eb; --accent:#2563eb; --warn:#d97706; --hot:#dc2626; --ok:#16a34a; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#0f1318; --card:#171c23; --fg:#e6e9ee; --mute:#8b94a3; --line:#262d37; --accent:#60a5fa; --warn:#f59e0b; --hot:#f87171; --ok:#4ade80; } }
+  :root { --bg:#09090b; --surface:#111114; --elev:#1a1a1f; --border:#222228; --border2:#2f2f37; --text:#f4f4f5; --muted:#a1a1aa; --faint:#8b8b95;
+    --accent:#3ecf8e; --accent-ink:#04130b; --work:#3ecf8e; --wait:#f5a623; --hot:#f2555a; --idle:#8b8b95; --shadow:none; --scrim:rgba(0,0,0,.55); color-scheme:dark }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --bg:#fafafa; --surface:#fff; --elev:#f1f1f3; --border:#e4e4e7; --border2:#d4d4d8; --text:#18181b; --muted:#52525b; --faint:#71717a;
+    --accent:#0a7d4f; --accent-ink:#fff; --work:#0a7d4f; --wait:#b45309; --hot:#c62828; --idle:#71717a; --shadow:0 1px 2px rgba(24,24,27,.05); --scrim:rgba(24,24,27,.35); color-scheme:light } }
+  :root[data-theme="light"] { --bg:#fafafa; --surface:#fff; --elev:#f1f1f3; --border:#e4e4e7; --border2:#d4d4d8; --text:#18181b; --muted:#52525b; --faint:#71717a;
+    --accent:#0a7d4f; --accent-ink:#fff; --work:#0a7d4f; --wait:#b45309; --hot:#c62828; --idle:#71717a; --shadow:0 1px 2px rgba(24,24,27,.05); --scrim:rgba(24,24,27,.35); color-scheme:light }
+
   * { box-sizing:border-box }
-  body { margin:0; padding:16px; background:var(--bg); color:var(--fg); font:14px/1.4 system-ui,sans-serif }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; letter-spacing:-.006em; font-variant-numeric:tabular-nums }
   button { font:inherit; color:inherit }
-  h1 { font-size:18px; margin:0 0 4px } .sub { color:var(--mute); margin-bottom:16px; font-size:13px }
-  .head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap }
-  .controls { display:flex; gap:14px; align-items:center; flex-wrap:wrap }
-  .only { font-size:13px; color:var(--mute); cursor:pointer; user-select:none; display:flex; gap:6px; align-items:center }
-  .seg { display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden }
-  .seg button { all:unset; cursor:pointer; padding:5px 12px; font-size:13px; color:var(--mute); background:var(--card) }
-  .seg button[aria-pressed="true"] { background:var(--accent); color:#fff }
-  .seg button:focus-visible, button.pin:focus-visible, button.wt-name:focus-visible, #dclose:focus-visible { outline:2px solid var(--accent); outline-offset:2px }
-  .top { display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); margin-bottom:16px }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; position:relative }
-  .card h2 { font-size:13px; margin:0 0 10px; color:var(--mute); font-weight:600; text-transform:uppercase; letter-spacing:.04em }
-  .cores { display:grid; grid-template-columns:repeat(auto-fill,minmax(54px,1fr)); gap:6px }
-  .core { text-align:center; font-size:11px; color:var(--mute) }
-  .bar { height:36px; border-radius:4px; background:var(--line); position:relative; overflow:hidden; margin-bottom:2px }
-  .bar > i { position:absolute; left:0; right:0; bottom:0; background:var(--accent) }
-  .grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fill,minmax(360px,1fr)) }
-  .wt-head { display:flex; justify-content:space-between; align-items:baseline; gap:8px }
-  .wt-title { display:flex; gap:6px; align-items:baseline; min-width:0 }
-  button.wt-name { all:unset; cursor:pointer; font-weight:600; word-break:break-all } button.wt-name:hover { text-decoration:underline }
-  .tag { font-size:11px; padding:1px 6px; border-radius:99px; background:var(--accent); color:#fff }
-  .nums { display:flex; gap:16px; margin:8px 0; flex-wrap:wrap }
-  .num b { font-size:20px; display:block } .num span { color:var(--mute); font-size:12px }
-  .meta { color:var(--mute); font-size:12px; margin-bottom:6px }
-  svg.spark { width:100%; height:44px; display:block; margin:6px 0 }
-  svg.spark.mem polyline { stroke:var(--warn) }
-  .sparks { display:grid; grid-template-columns:1fr 1fr; gap:10px } .sparks small { color:var(--mute); font-size:11px }
-  table { width:100%; border-collapse:collapse; font-size:12px } td { padding:2px 4px; border-top:1px solid var(--line); white-space:nowrap }
-  td.cmd { max-width:170px; overflow:hidden; text-overflow:ellipsis } td.n { text-align:right; font-variant-numeric:tabular-nums }
-  .empty { color:var(--mute); padding:24px; text-align:center }
-  .memtrack { height:10px; border-radius:5px; background:var(--line); overflow:hidden; margin:6px 0 4px } .memtrack > i { display:block; height:100%; background:var(--accent) }
-  ul.alerts { list-style:none; margin:0; padding:0; font-size:12px; max-height:150px; overflow:auto }
-  ul.alerts li { padding:3px 0; border-top:1px solid var(--line) } ul.alerts li:first-child { border-top:0 }
-  ul.alerts time { color:var(--mute); margin-right:6px } ul.alerts .msg { color:var(--mute); overflow-wrap:anywhere }
-  .done { font-size:12px; margin:6px 0; padding:6px 8px; border-radius:6px; background:var(--bg); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-  button.pin { all:unset; cursor:pointer; font-size:18px; line-height:1; color:var(--mute); opacity:.6; padding:0 2px }
-  button.pin:hover { opacity:1 } button.pin.on { color:var(--warn); opacity:1 }
-  .card.pinned { border-color:var(--warn) } .card.idle { opacity:.6 }
-  #grid .card, #arena .card { cursor:pointer }
+  .mono { font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace }
+  .faint { color:var(--faint) } .muted { color:var(--muted) }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:6px }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow) }
+  [hidden] { display:none !important }
 
-  /* ---- gaveta de preview ---- */
-  .drawer { position:fixed; top:0; right:0; bottom:0; width:min(560px,100vw); background:var(--card); border-left:1px solid var(--line); box-shadow:-8px 0 32px rgba(0,0,0,.25); display:flex; flex-direction:column; z-index:10 }
-  .drawer[hidden] { display:none }
-  .drawer header { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:14px 16px; border-bottom:1px solid var(--line) }
-  .drawer h2 { margin:0; font-size:16px; word-break:break-all }
-  #dclose { all:unset; cursor:pointer; font-size:24px; line-height:1; padding:2px 8px; color:var(--mute) } #dclose:hover { color:var(--fg) }
-  .dbody { overflow:auto; padding:14px 16px; display:flex; flex-direction:column; gap:14px; min-height:0 }
-  .dbody h3 { margin:0 0 6px; font-size:12px; color:var(--mute); text-transform:uppercase; letter-spacing:.04em }
+  /* barra superior */
+  .nav { height:56px; display:flex; align-items:center; gap:24px; padding:0 32px; border-bottom:1px solid var(--border) }
+  .brand { display:flex; align-items:center; gap:10px; font-weight:600; font-size:15px }
+  .root { color:var(--faint); font-size:12px }
+  .search { flex:1; display:flex; justify-content:center }
+  .search label { width:100%; max-width:440px; height:34px; display:flex; align-items:center; gap:8px; padding:0 10px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--faint) }
+  .search input { flex:1; min-width:0; border:0; outline:0; background:transparent; color:var(--text); font:inherit; font-size:13px }
+  kbd { font-family:"JetBrains Mono",ui-monospace,monospace; font-size:11px; padding:1px 6px; border:1px solid var(--border2); border-radius:5px; color:var(--muted) }
+  .seg { display:inline-flex; padding:2px; border:1px solid var(--border); border-radius:8px; background:var(--surface) }
+  .seg button { all:unset; cursor:pointer; padding:4px 12px; border-radius:6px; font-size:13px; color:var(--muted) }
+  .seg button[aria-pressed="true"] { background:var(--elev); color:var(--text); font-weight:500 }
+  .seg button:focus-visible { outline:2px solid var(--accent); outline-offset:1px }
+  .live { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); white-space:nowrap }
+  .dot { width:6px; height:6px; border-radius:50%; background:currentColor; flex:none }
+  .live .dot { width:7px; height:7px; background:var(--work) }
+
+  main { max-width:1440px; margin:0 auto; padding:28px 32px 40px }
+  .titlebar { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:20px }
+  h1 { margin:0; font-size:22px; font-weight:600; letter-spacing:-.02em }
+  .titlebar p { margin:4px 0 0; color:var(--muted); font-size:13px }
+  .filters { display:flex; gap:8px; flex-wrap:wrap }
+  .chip { height:30px; padding:0 12px; border-radius:8px; border:1px solid var(--border); background:transparent; color:var(--muted); font-size:13px; font-weight:500; cursor:pointer }
+  .chip[aria-pressed="true"] { background:var(--elev); border-color:var(--border2); color:var(--text) }
+  .chip span { color:var(--faint); font-weight:400; margin-left:4px }
+
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; margin-bottom:24px }
+  .kpi { padding:16px 18px }
+  .kpi .top { display:flex; justify-content:space-between; color:var(--muted); font-size:12.5px }
+  .kpi .mid { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; margin-top:10px }
+  .kpi b { font-size:28px; font-weight:600; letter-spacing:-.03em } .kpi .unit { color:var(--faint); font-size:13px; margin-left:4px }
+  .kpi .note { margin-top:8px; color:var(--faint); font-size:12px }
+
+  .layout { display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start }
+  .table { flex:1 1 640px; min-width:0; overflow-x:auto }
+  .tin { min-width:860px }
+  .row, .thead { display:grid; grid-template-columns:28px minmax(200px,1.7fr) 128px 112px 150px 120px 72px 88px; gap:12px; align-items:center; padding:0 18px }
+  .thead { height:40px; border-bottom:1px solid var(--border); color:var(--faint); font-size:12px; font-weight:500 }
+  .row { height:60px; border-bottom:1px solid var(--border); cursor:pointer }
+  .row:last-child { border-bottom:0 } .row:hover, .row.sel { background:var(--elev) }
+  .wt { min-width:0 } .wt-name { all:unset; cursor:pointer; font-weight:500; display:block; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+  .wt-name:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:4px }
+  .branch { margin-top:2px; font-size:12px; color:var(--faint); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+  .pin { all:unset; cursor:pointer; display:grid; place-items:center; width:24px; height:24px; color:var(--faint) } .pin.on { color:var(--wait) } .pin:focus-visible { outline:2px solid var(--accent); border-radius:6px }
+  .badge { display:inline-flex; align-items:center; gap:7px; height:24px; padding:0 10px; border-radius:999px; font-size:12px; font-weight:500; white-space:nowrap; background:color-mix(in srgb,var(--c) 14%,transparent); color:var(--c) }
+  .stack { display:flex; align-items:center } .av { width:24px; height:24px; display:grid; place-items:center; border-radius:50%; border:2px solid var(--surface); background:var(--elev); font-size:11px; font-weight:600; margin-left:-5px }
+  .av:first-child { margin-left:0 } .av.main { background:var(--accent); color:var(--accent-ink) } .stack small { margin-left:8px; color:var(--faint); font-size:12px }
+  .row:hover .av, .row.sel .av { border-color:var(--elev) }
+  .skill { display:inline-block; max-width:100%; height:24px; line-height:22px; padding:0 8px; border:1px solid var(--border2); border-radius:6px; color:var(--muted); font-size:11.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; vertical-align:middle }
+  .meter { display:flex; align-items:center; gap:10px } .meter .bar { flex:1; height:4px; border-radius:2px; background:var(--border) } .meter .bar i { display:block; height:100%; border-radius:2px }
+  .meter span { width:38px; text-align:right; font-size:13px }
+  aside.side { flex:0 1 320px; min-width:280px; display:flex; flex-direction:column; gap:16px }
+  .box h2 { margin:0; padding:14px 16px; font-size:13px; font-weight:600; border-bottom:1px solid var(--border) }
+  .li { padding:12px 16px; border-bottom:1px solid var(--border); font-size:12.5px } .li:last-child { border-bottom:0 }
+  .li .h { display:flex; justify-content:space-between; gap:8px; font-size:13px } .li p { margin:4px 0 0; color:var(--muted); overflow-wrap:anywhere }
+  .cores { display:grid; grid-template-columns:repeat(8,1fr); gap:4px; padding:14px 16px } .cores i { aspect-ratio:1; border-radius:4px; background:var(--border) }
+  .empty { padding:36px 16px; text-align:center; color:var(--muted) }
+
+  /* gaveta */
+  .scrim { position:fixed; inset:0; background:var(--scrim); z-index:9 }
+  .drawer { position:fixed; top:0; right:0; bottom:0; width:min(680px,100vw); display:flex; flex-direction:column; background:var(--surface); border-left:1px solid var(--border2); box-shadow:-24px 0 48px rgba(0,0,0,.35); z-index:10 }
+  .dh { padding:18px 24px 0 } .dh .t { display:flex; align-items:center; gap:12px; flex-wrap:wrap } .dh h2 { margin:0; font-size:18px; font-weight:600; letter-spacing:-.02em; word-break:break-all }
+  .tag { display:inline-flex; align-items:center; height:22px; padding:0 8px; border:1px solid var(--border2); border-radius:6px; color:var(--muted); font-size:11.5px }
+  .iconbtn { all:unset; cursor:pointer; display:grid; place-items:center; width:28px; height:28px; color:var(--muted) } .iconbtn:hover { color:var(--text) } .iconbtn:focus-visible { outline:2px solid var(--accent); border-radius:6px }
+  #dpin.on { color:var(--wait) }
+  .dsub { margin:6px 0 0; color:var(--faint); font-size:12.5px }
+  .tabs { display:flex; gap:20px; margin-top:16px; border-bottom:1px solid var(--border); margin-left:-24px; margin-right:-24px; padding:0 24px }
+  .tabs button { all:unset; cursor:pointer; padding:8px 0 10px; border-bottom:2px solid transparent; margin-bottom:-1px; color:var(--muted); font-size:13px; font-weight:500 }
+  .tabs button[aria-selected="true"] { color:var(--text); border-color:var(--accent) } .tabs button:focus-visible { outline:2px solid var(--accent); outline-offset:2px }
+  .dbody { flex:1; min-height:0; overflow:auto; padding:20px 24px; display:flex; flex-direction:column; gap:22px }
+  .dbody h3 { margin:0 0 8px; font-size:12px; font-weight:500; color:var(--faint); display:flex; justify-content:space-between }
+  .skillcard { display:flex; align-items:center; gap:14px; padding:12px 14px; border:1px solid var(--border); border-radius:10px; background:var(--elev) }
+  .skillcard .ic { flex:none; display:grid; place-items:center; width:32px; height:32px; border-radius:8px; border:1px solid var(--border2); color:var(--accent) }
+  .topo { position:relative; border:1px solid var(--border); border-radius:10px; background:var(--bg); overflow:hidden }
+  .topo .in { position:absolute; left:12px; top:16px; width:608px }
+  .node { position:absolute; box-sizing:border-box; padding:10px 12px; border:1px solid var(--border2); border-radius:10px; background:var(--surface) }
+  .node.main { border-color:var(--accent); width:180px; padding:12px } .node.sub { left:316px; width:292px }
+  .node .n { display:flex; align-items:center; gap:8px } .node .n .l { display:grid; place-items:center; width:22px; height:22px; border-radius:50%; background:var(--elev); border:1px solid var(--border2); font-size:11px; font-weight:600 }
+  .node.main .n .l { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); width:24px; height:24px }
+  .node .n .m { margin-left:auto; font-size:11px; color:var(--faint) } .node .s { margin-top:6px; display:flex; align-items:center; gap:6px; font-size:12px; white-space:nowrap }
+  .node .tool { margin-top:3px; font-size:11px; color:var(--faint); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+  .links, .pkt { position:absolute; left:0; top:0 }
+  .pkt { width:8px; height:8px; margin:-4px 0 0 -4px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent); animation:travel 2.6s linear infinite }
+  .talk { border:1px solid var(--border); border-radius:10px; overflow:hidden }
+  .talk > div { display:grid; grid-template-columns:62px 150px 76px minmax(0,1fr); gap:10px; align-items:baseline; padding:9px 14px; border-top:1px solid var(--border); font-size:12.5px } .talk > div:first-child { border-top:0 }
+  .talk .ov { white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
   .feed { display:flex; flex-direction:column; gap:6px }
-  .it { border-left:3px solid var(--line); padding:2px 0 2px 8px; font-size:12.5px; overflow-wrap:anywhere; white-space:pre-wrap }
-  .it .k { font-size:10.5px; font-weight:700; letter-spacing:.05em; margin-right:6px; color:var(--mute) }
-  .it.user { border-color:var(--accent) } .it.user .k { color:var(--accent) }
-  .it.text { border-color:var(--ok) } .it.text .k { color:var(--ok) }
-  .it.tool { border-color:var(--warn) } .it.tool .k { color:var(--warn) }
-  .it.result { color:var(--mute) }
-  .it time { color:var(--mute); font-size:11px; margin-left:6px }
+  .it { border-left:3px solid var(--border); padding:2px 0 2px 8px; font-size:12.5px; overflow-wrap:anywhere; white-space:pre-wrap }
+  .it .k { font-size:10.5px; font-weight:700; letter-spacing:.05em; margin-right:6px; color:var(--muted) } .it time { color:var(--faint); font-size:11px; margin-left:6px }
+  .it.user { border-color:var(--accent) } .it.text { border-color:var(--work) } .it.tool { border-color:var(--wait) } .it.result { color:var(--muted) }
+  .it.user .k { color:var(--accent) } .it.text .k { color:var(--work) } .it.tool .k { color:var(--wait) }
+  .grid2 { display:grid; grid-template-columns:repeat(2,1fr); gap:12px } .grid2 .card { padding:12px 14px }
+  table { width:100%; border-collapse:collapse; font-size:12px } td { padding:4px; border-top:1px solid var(--border); white-space:nowrap } td.n { text-align:right } td.c { max-width:300px; overflow:hidden; text-overflow:ellipsis }
 
-  /* ---- modo divertido ---- */
-  body.fun { --bg:#0b0d1a; --card:#14172b; --fg:#e9ecff; --mute:#9096c4; --line:#2a2f57; --accent:#7c5cff; --warn:#ffb020; --hot:#ff5470; --ok:#3ddc97;
-    background:radial-gradient(900px 500px at 10% -10%, #2a1f6b55, transparent), radial-gradient(800px 500px at 100% 0%, #0a4a6b55, transparent), var(--bg);
-    font-family:ui-rounded,"Trebuchet MS",system-ui,sans-serif }
-  body.fun h1::before { content:"🎮 " }
-  .arena { display:grid; gap:16px; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)) }
-  .arena .card { --c:hsl(var(--hue) 75% 60%); border-radius:18px; border:2px solid hsl(var(--hue) 60% 45% / .6); box-shadow:0 0 22px hsl(var(--hue) 80% 55% / .18); padding:12px 14px 14px; transition:transform .15s }
-  .arena .card:hover { transform:translateY(-3px) }
-  .arena .card.pinned { border-color:var(--warn) }
-  .arena .card[data-state="hot"] { border-color:var(--hot); box-shadow:0 0 26px #ff547066 }
-  .arena .card[data-state="done"] { border-color:var(--ok); box-shadow:0 0 28px #3ddc9755 }
-  .summary { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px }
-  .summary span { background:var(--card); border:1px solid var(--line); border-radius:99px; padding:4px 12px; font-size:13px }
-  .stage { position:relative; height:172px; display:flex; align-items:flex-end; justify-content:center; margin:6px 0 8px;
-    background:linear-gradient(transparent 70%, hsl(var(--hue) 40% 20% / .5)); border-radius:12px }
-  .bubble { position:absolute; top:4px; left:8px; right:8px; text-align:center; font-size:11.5px; background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:12px; padding:4px 8px; max-height:3.1em; overflow:hidden }
-  .bot { width:92px; height:104px; overflow:visible; --ink:var(--c) }
-  .bot .head, .bot .body, .bot .arm { fill:var(--c) } .bot .ant { fill:var(--warn) } .bot .desk { fill:hsl(var(--hue) 30% 30%) }
-  .bot .eyes circle { fill:#0b0d1a } .bot .eyes-closed path, .bot .mouth { stroke:#0b0d1a; stroke-width:3; fill:none; stroke-linecap:round }
-  .bot .visor { fill:#fff; opacity:.9 }
-  .bot .eyes-closed { display:none } [data-state="sleep"] .bot .eyes { display:none } [data-state="sleep"] .bot .eyes-closed { display:block }
-  .bot .rig, .bot .arm, .bot .eyes { transform-box:fill-box }
-  .zzz, .confetti, .sweat { position:absolute; pointer-events:none; display:none }
-  .zzz { right:14%; top:30%; font-weight:800; color:var(--mute); font-size:18px } [data-state="sleep"] .zzz { display:block; animation:zz 2.6s ease-in-out infinite }
-  .sweat { left:22%; top:34% ; font-size:18px } [data-state="hot"] .sweat { display:block; animation:drip 1s ease-in infinite }
-  .confetti { inset:0 } [data-state="done"] .confetti { display:block }
-  .confetti i { position:absolute; left:50%; bottom:30%; width:7px; height:11px; border-radius:2px; background:hsl(calc(var(--n) * 45) 90% 60%); animation:burst 1.4s ease-out infinite; animation-delay:calc(var(--n) * .08s) }
-  [data-state="work"] .rig { animation:bob var(--spd,.8s) ease-in-out infinite }
-  [data-state="work"] .arm.l { transform-origin:50% 0; animation:type var(--spd,.8s) ease-in-out infinite }
-  [data-state="work"] .arm.r { transform-origin:50% 0; animation:type var(--spd,.8s) ease-in-out infinite reverse }
-  [data-state="work"] .eyes { animation:blink 3.4s infinite; transform-origin:center }
-  [data-state="sleep"] .rig { animation:breathe 3.2s ease-in-out infinite }
-  [data-state="done"] .rig { animation:jump .7s ease-out infinite }
-  [data-state="hot"] .rig { animation:shake .25s linear infinite } [data-state="hot"] .bot .head { fill:var(--hot) }
-  [data-state="done"] .mouth { d:path("M30 47q10 12 20 0") }
-  @keyframes bob { 50% { transform:translateY(-4px) } }
-  @keyframes type { 50% { transform:rotate(18deg) } }
-  @keyframes blink { 0%,94%,100% { transform:scaleY(1) } 97% { transform:scaleY(.1) } }
-  @keyframes breathe { 50% { transform:translateY(2px) scale(1.01) } }
-  @keyframes jump { 0%,100% { transform:translateY(0) } 40% { transform:translateY(-16px) } }
-  @keyframes shake { 25% { transform:translateX(-2px) } 75% { transform:translateX(2px) } }
-  @keyframes zz { 0% { opacity:0; transform:translate(0,8px) } 40% { opacity:1 } 100% { opacity:0; transform:translate(10px,-14px) } }
-  @keyframes drip { 0% { opacity:0; transform:translateY(-6px) } 30% { opacity:1 } 100% { opacity:0; transform:translateY(14px) } }
-  @keyframes burst { 0% { opacity:1; transform:translate(0,0) rotate(0) } 100% { opacity:0; transform:translate(calc((var(--n) - 4) * 16px), -110px) rotate(260deg) } }
-  .stat { display:grid; grid-template-columns:44px 1fr 64px; align-items:center; gap:6px; font-size:11.5px; margin-top:5px; color:var(--mute) }
-  .stat .v { text-align:right; color:var(--fg); font-variant-numeric:tabular-nums }
-  .track { height:9px; border-radius:6px; background:var(--line); overflow:hidden } .track i { display:block; height:100%; width:0; border-radius:6px; transition:width .6s }
-  .track .cpu { background:linear-gradient(90deg,#3ddc97,#ffb020,#ff5470) } .track .ram { background:linear-gradient(90deg,#4cc9f0,#7c5cff) } .track .xp { background:linear-gradient(90deg,#ffb020,#ff7ad9) }
-  .chips { display:flex; gap:4px; flex-wrap:wrap; margin-top:8px; min-height:18px }
-  .chips b { font-size:10.5px; padding:1px 6px; border-radius:6px; background:var(--line); color:var(--fg) } .chips b.on { background:var(--accent) }
-
-  @media (prefers-reduced-motion: reduce) { .rig, .arm, .eyes, .zzz, .sweat, .confetti i { animation:none !important } .arena .card { transition:none } }
+  /* arena */
+  .chips { display:flex; gap:8px; flex-wrap:wrap }
+  .pill { display:inline-flex; align-items:center; gap:7px; height:28px; padding:0 12px; border:1px solid var(--border); border-radius:999px; background:var(--surface); color:var(--muted); font-size:12.5px }
+  .stations { display:grid; grid-template-columns:repeat(auto-fill,minmax(520px,1fr)); gap:20px; margin-top:20px }
+  .st { padding:18px 24px; cursor:pointer } .st[data-state="hot"] { border-color:color-mix(in srgb,var(--hot) 55%,var(--border)) } .st[data-state="waiting"] { border-color:color-mix(in srgb,var(--wait) 45%,var(--border)) } .st[data-state="done"] { border-color:color-mix(in srgb,var(--work) 55%,var(--border)) }
+  .st .hd { display:flex; align-items:center; gap:10px; min-height:28px } .st .hd .wt-name { font-size:15px; font-weight:600; letter-spacing:-.01em; display:inline-block; max-width:none } .st .hd .r { margin-left:auto; color:var(--faint); font-size:12px }
+  .stage { position:relative; height:196px; margin-top:10px; border-radius:10px; background:var(--bg); border:1px solid var(--border); overflow:hidden }
+  .stage .bub { position:absolute; left:12px; top:10px; max-width:340px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:5px 10px; border:1px solid var(--border2); border-radius:8px; background:var(--surface); color:var(--muted); font-size:12px; z-index:2 }
+  .stage .lbl { position:absolute; left:50px; top:168px; width:120px; text-align:center; color:var(--faint); font-size:11.5px }
+  .char { position:absolute; left:66px; top:50px; width:88px; height:106px; color:var(--c, var(--idle)) }
+  .char .eye { fill:currentColor } .char .badge-done, .char .q { display:none }
+  .st[data-state="working"] { --c:var(--work) } .st[data-state="hot"] { --c:var(--hot) } .st[data-state="waiting"] { --c:var(--wait) } .st[data-state="done"] { --c:var(--work) } .st[data-state="idle"] { --c:var(--idle) }
+  .st[data-state="idle"] .eye { transform:scaleY(.25); transform-box:fill-box; transform-origin:center }
+  .st[data-state="working"] .char { animation:bob 1.1s ease-in-out infinite } .st[data-state="hot"] .char { animation:shake .3s linear infinite } .st[data-state="done"] .char { animation:jump .8s ease-out infinite }
+  .st[data-state="done"] .badge-done, .st[data-state="waiting"] .q { display:block }
+  .typing { position:absolute; left:164px; top:118px; display:none; align-items:flex-end; gap:3px; height:14px } .st[data-state="working"] .typing, .st[data-state="hot"] .typing { display:flex }
+  .typing i { display:block; width:3px; height:14px; border-radius:2px; background:var(--c); transform-origin:bottom; animation:eq .9s ease-in-out infinite } .typing i:nth-child(2) { animation-delay:-.3s } .typing i:nth-child(3) { animation-delay:-.6s }
+  .sub { position:absolute; left:400px; display:flex; align-items:center; gap:10px; font-size:12.5px } .sub b { font-weight:500; display:block } .sub small { font-size:11.5px }
+  .stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:20px; margin-top:14px }
+  .stats .h { display:flex; justify-content:space-between; font-size:12px; color:var(--faint) } .stats .h span:last-child { color:var(--text) } .stats .bar { margin-top:6px; height:4px; border-radius:2px; background:var(--border) } .stats .bar i { display:block; height:100%; border-radius:2px }
+  @keyframes travel { from { offset-distance:0% } to { offset-distance:100% } }
+  @keyframes bob { 50% { transform:translateY(-3px) } } @keyframes shake { 25% { transform:translateX(-1.5px) } 75% { transform:translateX(1.5px) } }
+  @keyframes jump { 0%,100% { transform:translateY(0) } 40% { transform:translateY(-12px) } } @keyframes eq { 50% { transform:scaleY(.35) } }
+  @media (prefers-reduced-motion: reduce) { .pkt, .char, .typing i { animation:none !important } .pkt { offset-distance:50% } }
+  @media (max-width: 900px) { .nav { flex-wrap:wrap; height:auto; padding:12px 16px; gap:12px } main { padding:20px 16px } .search { order:5; flex-basis:100% } .stations { grid-template-columns:1fr } }
 </style>
 </head>
 <body>
-<div class="head">
-  <div><h1>Painel de Worktrees</h1><div class="sub" id="sub">conectando…</div></div>
-  <div class="controls">
-    <label class="only"><input type="checkbox" id="onlypin"> só fixados</label>
-    <div class="seg" role="group" aria-label="Visual">
-      <button type="button" data-mode="sober" aria-pressed="true">Sóbrio</button>
-      <button type="button" data-mode="fun" aria-pressed="false">Divertido</button>
+<header class="nav">
+  <div class="brand">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x=".5" y=".5" width="23" height="23" rx="6" fill="var(--elev)" stroke="var(--border2)"/><path d="M6 8h7M6 12h12M6 16h9" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round"/></svg>
+    wt-monitor
+  </div>
+  <span class="root mono" id="root"></span>
+  <div class="search"><label>
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+    <input id="q" aria-label="Buscar" placeholder="Buscar worktree, branch, agente ou skill" autocomplete="off"><kbd>Ctrl K</kbd></label></div>
+  <div class="seg" role="group" aria-label="Visual">
+    <button type="button" data-mode="sober" aria-pressed="true">Visão geral</button>
+    <button type="button" data-mode="fun" aria-pressed="false">Arena</button>
+  </div>
+  <span class="live"><span class="dot"></span><span id="live">conectando…</span></span>
+</header>
+
+<main>
+  <div id="overview">
+    <div class="titlebar">
+      <div><h1>Worktrees</h1><p id="sub"></p></div>
+      <div class="filters" id="filters" role="group" aria-label="Filtros"></div>
+    </div>
+    <section class="kpis" id="kpis" aria-label="Resumo"></section>
+    <div class="layout">
+      <section class="card table" aria-label="Worktrees"><div class="tin">
+        <div class="thead"><span></span><span>Worktree</span><span>Status</span><span>Agentes</span><span>Skill</span><span>CPU</span><span>Memória</span><span>60 s</span></div>
+        <div id="rows"></div>
+        <div class="empty" id="empty" hidden></div>
+      </div></section>
+      <aside class="side">
+        <section class="card box"><h2>Tarefas concluídas</h2><div id="events"></div></section>
+        <section class="card box"><h2>Alertas <span class="faint" id="thr" style="font-weight:400"></span></h2><div id="alerts"></div></section>
+        <section class="card box"><h2>CPU por core</h2><div class="cores" id="cores"></div></section>
+      </aside>
     </div>
   </div>
-</div>
 
-<div class="top">
-  <div class="card"><h2>CPU por core</h2><div class="cores" id="cores"></div></div>
-  <div class="card"><h2>Sistema</h2><div class="nums" id="sys"></div><div class="memtrack"><i id="sysbar"></i></div><div class="meta" id="sysmeta"></div></div>
-  <div class="card"><h2>Agentes · tarefas concluídas</h2><ul class="alerts" id="events"></ul></div>
-  <div class="card"><h2>Alertas <span id="thr" style="text-transform:none;letter-spacing:0;font-weight:400"></span></h2><ul class="alerts" id="alerts"></ul></div>
-</div>
-
-<div class="summary" id="summary" hidden></div>
-<div class="grid" id="grid"></div>
-<div class="arena" id="arena" hidden></div>
-<div class="empty" id="empty" hidden></div>
-
-<aside class="drawer" id="drawer" role="dialog" aria-labelledby="dtitle" hidden>
-  <header><h2 id="dtitle"></h2><button type="button" id="dclose" aria-label="Fechar">×</button></header>
-  <div class="dbody">
-    <div class="meta" id="dmeta"></div>
-    <section><h3>Processos</h3><table id="dprocs"></table></section>
-    <section><h3>Atividade da sessão</h3><div class="feed" id="dfeed"></div></section>
+  <div id="arena" hidden>
+    <div class="titlebar"><div><h1>Arena</h1></div><div class="chips" id="chips"></div></div>
+    <div class="stations" id="stations"></div>
+    <div class="empty" id="aempty" hidden></div>
   </div>
+</main>
+
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" role="dialog" aria-labelledby="dtitle" hidden>
+  <div class="dh">
+    <div class="t"><h2 id="dtitle"></h2><span class="tag mono" id="dbranch"></span><span id="dstatus"></span><span style="flex:1"></span>
+      <button type="button" class="iconbtn" id="dpin"></button>
+      <button type="button" class="iconbtn" id="dclose" aria-label="Fechar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <p class="dsub" id="dsub"></p>
+    <div class="tabs" role="tablist" id="tabs"></div>
+  </div>
+  <div class="dbody" id="dbody"></div>
 </aside>
 
 <script>
-
 /* ---------- modo demonstração (?demo): dados fictícios gerados aqui, sem servidor ---------- */
 const QS = new URLSearchParams(location.search), DEMO = QS.has('demo');
 const DEMO_T0 = Date.now(), DEMO_ROOT = '/home/dev/projects';
-const DEMO_WT = [['acme/api', 1], ['acme/web', 1], ['acme/docs', 0], ['tools/cli', 1], ['lab/ml-experiments', 1], ['acme/mobile', 1]];
+const DEMO_WT = [['acme/api', 1, 'feat/order-pagination'], ['acme/web', 1, 'feat/checkout-form'], ['acme/docs', 0, 'main'], ['tools/cli', 1, 'feat/sync-command'], ['lab/ml-experiments', 1, 'exp/lora-sweep'], ['acme/mobile', 1, 'chore/deps']];
 function demoData() {
   const now = Date.now(), t = (now - DEMO_T0) / 1000, T0 = Math.floor(DEMO_T0 / 1000);
-  const cycle = T0 + Math.floor(t / 30) * 30; // a cada 30s o agente de acme/web "termina uma tarefa"
-  const groups = DEMO_WT.map(([name, claude], i) => {
+  const cycle = T0 + Math.floor(t / 30) * 30; // a cada 30 s o agente de acme/web "termina uma tarefa"
+  const groups = DEMO_WT.map(([name, claude, branch], i) => {
     const idle = i === 2 || i === 5;
-    const cpu = i === 4 ? 320 + 20 * Math.sin(t) : idle ? 0.5 : 40 + 120 * Math.abs(Math.sin(t / (4 + i) + i));
+    const cpu = i === 4 ? 320 + 20 * Math.sin(t) : idle ? 0.5 : i === 1 ? 4 + 2 * Math.sin(t) : 40 + 120 * Math.abs(Math.sin(t / (4 + i) + i));
     const rss = (i === 4 ? 4.4e9 : 3e8 + i * 2.2e8) + 2e7 * Math.sin(t / 3 + i);
     const cmds = [claude ? 'claude' : 'node server.js', i === 4 ? 'python train.py --epochs 40' : 'node ./node_modules/.bin/vite', 'cargo build --release'];
     return {
-      path: `${DEMO_ROOT}/${name}`, name, cpu, rss, threads: 18 + i * 4, nproc: 3, claude: !!claude,
+      path: `${DEMO_ROOT}/${name}`, name, branch, cpu, rss, threads: 18 + i * 4, nproc: 3, claude: !!claude,
       cores_in_use: idle ? [] : [i * 2, i * 2 + 1], aff: [`${i * 2}-${i * 2 + 1}`],
       procs: cmds.map((cmd, k) => ({ pid: 4000 + i * 10 + k, cmd, pct: idle ? 0 : cpu / (k + 1.5), rss: rss / (k + 1.2), cpu: i * 2 + (k % 2) })),
     };
@@ -185,307 +229,454 @@ function demoData() {
     ],
   };
 }
-function demoPreview() {
-  const iso = m => new Date(Date.now() - m * 60000).toISOString();
-  const a = (c, m) => ({ type: 'assistant', timestamp: iso(m), message: { role: 'assistant', content: c } });
-  const lines = [
-    { type: 'user', timestamp: iso(9), message: { role: 'user', content: 'Adicione paginação na listagem de pedidos' } },
-    a([{ type: 'text', text: 'Vou olhar como a listagem é montada hoje.' }, { type: 'tool_use', name: 'Read', input: { file_path: 'src/orders/list.ts' } }], 8),
-    { type: 'user', timestamp: iso(8), message: { role: 'user', content: [{ type: 'tool_result', content: 'export async function listOrders() { return db.orders.findAll() }' }] } },
-    a([{ type: 'tool_use', name: 'Edit', input: { file_path: 'src/orders/list.ts', description: 'aceitar page e pageSize' } }], 6),
-    a([{ type: 'tool_use', name: 'Bash', input: { command: 'npm test -- orders' } }], 4),
-    { type: 'user', timestamp: iso(3), message: { role: 'user', content: [{ type: 'tool_result', content: 'Tests: 14 passed, 14 total' }] } },
-    a([{ type: 'text', text: 'Paginação implementada com `page` e `pageSize` e cobertura de testes. Os 14 testes passam.' }], 2),
-  ].map(o => JSON.stringify(o));
-  return { found: true, session: 'demo0000', mtime: Date.now() / 1000, lines };
+function demoPreview(path) {
+  const name = path.replace(DEMO_ROOT + '/', ''), now = Date.now();
+  const iso = s => new Date(now - s * 1000).toISOString();
+  const A = (c, s) => ({ type: 'assistant', timestamp: iso(s), message: { role: 'assistant', content: c } });
+  const U = (c, s) => ({ type: 'user', timestamp: iso(s), message: { role: 'user', content: c } });
+  const tu = (n, input) => ({ type: 'tool_use', name: n, input });
+  const note = (id, status, summary, s) => U(`<task-notification>\n<task-id>${id}</task-id>\n<status>${status}</status>\n<summary>${summary}</summary>\n</task-notification>`, s);
+  const sub = (id, type, description, finished, age, tool, extra = []) => ({
+    id, mtime: now / 1000 - age, meta: JSON.stringify({ agentType: type, description, model: 'sonnet', finished }),
+    lines: [A([tu(tool[0], tool[1])], age + 5), ...extra].map(o => JSON.stringify(o)),
+  });
+  const scenes = {
+    'acme/api': { age: 3, lines: [
+      U('Adicione paginação na listagem de pedidos', 600),
+      A([{ type: 'text', text: 'Vou dividir o trabalho entre agentes especializados.' }, tu('Skill', { skill: 'agent-orchestration' })], 560),
+      A([tu('Agent', { subagent_type: 'backend', description: 'Implementar paginação nos endpoints de pedidos' })], 540),
+      A([tu('Agent', { subagent_type: 'frontend', description: 'Ajustar a listagem para consumir page e pageSize' })], 538),
+      A([tu('Agent', { subagent_type: 'reviewer', description: 'Revisar a PR' })], 300),
+      note('ag3', 'completed', 'PR aprovada com ressalvas, sem bloqueantes.', 70),
+      A([tu('SendMessage', { to: 'ag1', summary: 'Limite máximo de pageSize: 100' })], 14)],
+      subs: [sub('ag1', 'backend', 'Implementar paginação', false, 4, ['Edit', { file_path: 'src/orders/list.ts' }], [A([tu('SendMessage', { to: 'main', summary: 'Limite máximo de pageSize? Sugiro 100.' })], 40)]),
+             sub('ag2', 'frontend', 'Ajustar a listagem', false, 2, ['Bash', { command: 'npm test -- orders' }]),
+             sub('ag3', 'reviewer', 'Revisar a PR', true, 75, ['Read', { file_path: 'src/orders/list.ts' }])] },
+    'lab/ml-experiments': { age: 6, lines: [U('Rode o sweep de LoRA', 900), A([tu('Skill', { skill: 'experiment-runner' })], 840), A([tu('Agent', { subagent_type: 'data', description: 'Preparar o dataset de treino' })], 800), A([tu('Bash', { command: 'python train.py --epochs 40' })], 6)],
+      subs: [sub('ag4', 'data', 'Preparar o dataset', false, 5, ['Bash', { command: 'python prep.py' }])] },
+    'acme/web': { age: 120, lines: [U('Refatore o formulário de checkout', 900), A([tu('Skill', { skill: 'frontend-design' })], 700), A([{ type: 'text', text: 'Preciso de uma decisão: layout A (uma coluna) ou B (duas colunas)?' }], 120)], subs: [] },
+    'tools/cli': { age: 20, lines: [U('Implemente o subcomando sync', 300), A([tu('Agent', { subagent_type: 'tests', description: 'Escrever os testes do subcomando' })], 120), U([{ type: 'tool_result', content: 'ok' }], 20)],
+      subs: [sub('ag5', 'tests', 'Escrever os testes', false, 8, ['Write', { file_path: 'tests/sync.rs' }])] },
+    'acme/mobile': { age: 10800, lines: [U('Atualize as dependências', 11000), A([{ type: 'text', text: 'Dependências atualizadas.' }], 10800)], subs: [] },
+  };
+  const s = scenes[name];
+  if (!s) return { found: false };
+  return { found: true, session: 'demo0000', mtime: now / 1000 - s.age, lines: s.lines.map(o => JSON.stringify(o)), subs: s.subs };
 }
 
-const HIST = 60, hist = {}, memHist = {};
-const fmtB = b => b > 1e9 ? (b / 1e9).toFixed(1) + ' GB' : (b / 1e6).toFixed(0) + ' MB';
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const clock = t => new Date(t * 1000).toLocaleTimeString('pt-BR');
+/* ---------- utilidades ---------- */
 const $ = id => document.getElementById(id);
-// Preferências ficam no navegador; a página funciona sem localStorage.
-const load = (k, d) => { if (new URLSearchParams(location.search).has('demo')) return d; try { return localStorage.getItem(k) ?? d; } catch { return d; } };
-const store = (k, v) => { if (!new URLSearchParams(location.search).has('demo')) try { localStorage.setItem(k, v); } catch {} };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const fmtB = b => b > 1e9 ? (b / 1e9).toFixed(1) + ' GB' : (b / 1e6).toFixed(0) + ' MB';
+const clock = t => new Date(t * 1000).toLocaleTimeString('pt-BR');
+const brief = (v, n) => { v = typeof v === 'string' ? v : JSON.stringify(v ?? ''); return v.length > n ? v.slice(0, n) + '…' : v; };
+// Preferências ficam no navegador; a página funciona sem localStorage (e o modo demo não grava nada).
+const load = (k, d) => { if (DEMO) return d; try { return localStorage.getItem(k) ?? d; } catch { return d; } };
+const store = (k, v) => { if (!DEMO) try { localStorage.setItem(k, v); } catch {} };
+const setHTML = (el, h) => { if (el._h !== h) { el.innerHTML = h; el._h = h; } };
+const baseName = cmd => (cmd.split(' ')[0] || '').split('/').pop();
+const nowSec = () => DEMO ? Date.now() / 1000 : (data ? data.t : Date.now() / 1000);
+const ago = t => { const s = Math.max(0, nowSec() - t); return s < 60 ? `há ${Math.round(s)} s` : s < 3600 ? `há ${Math.round(s / 60)} min` : `há ${Math.round(s / 3600)} h`; };
+if (QS.get('theme')) document.documentElement.dataset.theme = QS.get('theme');
 
-let data = null, mode = QS.get('mode') || load('wt-mode', 'sober'), onlyPinned = load('wt-only', '0') === '1';
+const HIST = 60, hist = {}, memHist = {}, kHist = { agents: [], cpu: [], mem: [], tasks: [] };
+let data = null, mode = QS.get('mode') === 'fun' ? 'fun' : QS.get('mode') === 'sober' ? 'sober' : load('wt-mode', 'sober');
+let filter = load('wt-filter', 'all'), query = '', tab = QS.get('tab') || 'agents', drawerPath = null, drawerOpener = null;
 let pins = new Set(); try { pins = new Set(JSON.parse(load('wt-pins', '[]'))); } catch {}
 let xp = {}; try { xp = JSON.parse(load('wt-xp', '{}')); } catch {}
 let xpSeen = Number(load('wt-xp-seen', '-1'));
+const act = {}; // path -> { at, d }  (atividade derivada da transcrição)
 
-const savePins = () => store('wt-pins', JSON.stringify([...pins]));
+const STATUS = { working: ['Trabalhando', 'var(--work)'], waiting: ['Aguardando você', 'var(--wait)'], idle: ['Ocioso', 'var(--idle)'], hot: ['No limite', 'var(--hot)'] };
+const badge = st => `<span class="badge" style="--c:${STATUS[st][1]}"><span class="dot"></span>${STATUS[st][0]}</span>`;
+const PIN_SVG = on => `<svg width="16" height="16" viewBox="0 0 24 24" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9 6.8 19.6l1-5.8L3.5 9.7l5.9-.9L12 3.5z"/></svg>`;
 
-/* ---------- utilidades de lista ---------- */
-function viewList(d) {
+/* ---------- atividade dos agentes, derivada das transcrições ---------- */
+const T = e => { const t = Date.parse(e.timestamp); return isNaN(t) ? 0 : t / 1000; };
+function blocks(e) {
+  // só mensagens reais; linhas como `api-request-blob` guardam cópias da requisição (sem timestamp) e duplicariam tudo
+  if (e.type !== 'assistant' && e.type !== 'user') return [];
+  const m = e.message; if (!m) return [];
+  if (typeof m.content === 'string') return [{ type: 'text', text: m.content, role: m.role }];
+  return Array.isArray(m.content) ? m.content.map(b => ({ ...b, role: m.role })) : [];
+}
+function summarize(i) {
+  if (!i || typeof i !== 'object') return brief(i, 120);
+  for (const k of ['command', 'file_path', 'pattern', 'path', 'url', 'description', 'prompt', 'query']) if (i[k]) return brief(i[k], 140);
+  return brief(Object.values(i).find(v => typeof v === 'string') ?? i, 120);
+}
+function derive(r, now) {
+  const types = {};
+  const subs = (r.subs || []).map(s => {
+    let m = {}; try { m = JSON.parse(s.meta || '{}'); } catch {}
+    types[s.id] = m.agentType || 'agente';
+    return { id: s.id, type: m.agentType || 'agente', desc: m.description || '', model: m.model || '', finished: !!m.finished, mtime: s.mtime, lines: s.lines, tool: '' };
+  });
+  const name = id => ['main', 'team-lead', 'lead'].includes(id) ? 'principal' : types[id] || (String(id).length > 14 ? 'agente' : String(id));
+  const talk = []; let skill = null, last = null;
+  for (const l of r.lines) {
+    let e; try { e = JSON.parse(l); } catch { continue; }
+    const t = T(e);
+    if (e.type === 'assistant' || e.type === 'user') last = e;
+    for (const b of blocks(e)) {
+      if (b.type === 'tool_use') {
+        if (b.name === 'Skill') skill = { name: b.input?.skill || '?', t };
+        else if (b.name === 'Agent' || b.name === 'Task') talk.push({ t, from: 'principal', to: b.input?.subagent_type || 'agente', kind: 'Delegou', msg: b.input?.description || '' });
+        else if (b.name === 'SendMessage') talk.push({ t, from: 'principal', to: name(b.input?.to), kind: 'Mensagem', msg: b.input?.summary || brief(b.input?.message, 120) });
+      } else if (b.type === 'text' && b.role === 'user' && typeof b.text === 'string' && b.text.includes('<task-notification>')) {
+        const g = k => (b.text.match(new RegExp(`<${k}>([\\s\\S]*?)</${k}>`)) || [])[1] || '';
+        const st = g('status');
+        talk.push({ t, from: name(g('task-id')), to: 'principal', kind: st === 'completed' ? 'Concluiu' : st === 'failed' ? 'Falhou' : 'Atualizou', msg: g('summary') });
+      }
+    }
+  }
+  subs.forEach(s => {
+    for (const l of s.lines) {
+      let e; try { e = JSON.parse(l); } catch { continue; }
+      for (const b of blocks(e)) if (b.type === 'tool_use') {
+        s.tool = `${b.name}  ${summarize(b.input)}`;
+        if (b.name === 'SendMessage') talk.push({ t: T(e), from: s.type, to: name(b.input?.to), kind: 'Mensagem', msg: b.input?.summary || brief(b.input?.message, 120) });
+      }
+    }
+    s.running = !s.finished && now - s.mtime < 300;
+  });
+  talk.sort((a, b) => a.t - b.t);
+  // estado do agente principal pela última entrada: terminou o turno (text), aguarda ferramenta (tool) ou processa (user)
+  let main = 'unknown';
+  if (last) main = last.type === 'assistant' ? (blocks(last).some(b => b.type === 'tool_use') ? 'tool' : 'text') : 'user';
+  return { found: true, subs, talk: talk.slice(-14), skill, main, mtime: r.mtime, session: r.session, lines: r.lines };
+}
+let polling = false;
+async function pollActivity() {
+  if (polling || !data) return;
+  polling = true;
+  try {
+    const want = data.groups.filter(g => g.claude).map(g => g.path);
+    if (drawerPath && !want.includes(drawerPath)) want.unshift(drawerPath);
+    pins.forEach(p => { if (!want.includes(p)) want.push(p); });
+    const fresh = p => act[p] && Date.now() - act[p].at < (p === drawerPath ? 2000 : 5000);
+    const p = want.filter(x => !fresh(x)).sort((a, b) => (act[a]?.at || 0) - (act[b]?.at || 0))[0];
+    if (!p) return;
+    const r = DEMO ? demoPreview(p) : await (await fetch(`/api/preview?path=${encodeURIComponent(p)}&n=250&b=300000&subs=1`)).json();
+    act[p] = { at: Date.now(), d: r.found ? derive(r, nowSec()) : { found: false, subs: [], talk: [], lines: [], skill: null } };
+    if (data) render(data);
+  } catch { /* sem conexão: a próxima rodada tenta de novo */ } finally { polling = false; }
+}
+
+/* ---------- estado derivado por worktree ---------- */
+function statusOf(g, a) {
+  const c = data.cfg;
+  if (g.rss >= c.mem_bytes || g.cpu >= c.cpu_pct) return 'hot';
+  if (!g.claude || !a || !a.found) return g.cpu >= 5 ? 'working' : 'idle';
+  const age = nowSec() - a.mtime;
+  if (a.subs.some(s => s.running) || g.cpu >= 15) return 'working';
+  if (a.main === 'text') return age > 1800 ? 'idle' : 'waiting';   // terminou o turno: espera você
+  if (a.main === 'tool') return age > 90 ? 'waiting' : 'working';   // ferramenta parada há muito: provável pedido de permissão
+  return age > 600 ? 'idle' : 'working';                            // processando
+}
+const activeSkill = a => a && a.skill && nowSec() - a.skill.t < 900 ? a.skill : null;
+function agentsOf(g, a) {
+  const out = [];
+  if (g.claude) out.push({ letter: 'M', title: 'Agente principal', main: true });
+  if (a) a.subs.filter(s => s.running).forEach(s => out.push({ letter: (s.type[0] || '?').toUpperCase(), title: s.type + (s.desc ? ': ' + s.desc : '') }));
+  return out;
+}
+function rowsFor(d) {
   const have = new Set(d.groups.map(g => g.path));
   const idle = [...pins].filter(p => !have.has(p)).map(p => ({
-    path: p, name: p.startsWith(d.root + '/') ? p.slice(d.root.length + 1) : p, idle: true,
+    path: p, name: p.startsWith(d.root + '/') ? p.slice(d.root.length + 1) : p, branch: '', idle: true,
     cpu: 0, rss: 0, threads: 0, nproc: 0, claude: false, cores_in_use: [], aff: [], procs: [],
   }));
-  let all = d.groups.concat(idle);
-  if (onlyPinned) all = all.filter(g => pins.has(g.path));
-  return all.sort((a, b) => pins.has(b.path) - pins.has(a.path)); // estável: mantém a ordem por CPU
-}
-
-// Reconciliação por chave: o elemento do cartão persiste, então foco e animações CSS não reiniciam a cada segundo.
-function sync(container, items, make, update) {
-  const map = container._m || (container._m = new Map()), seen = new Set();
-  items.forEach((it, i) => {
-    let el = map.get(it.path);
-    if (!el) { el = make(it); map.set(it.path, el); }
-    update(el, it);
-    seen.add(it.path);
-    if (container.children[i] !== el) container.insertBefore(el, container.children[i] || null);
+  return d.groups.concat(idle).map(g => {
+    const a = act[g.path]?.d, st = statusOf(g, a), skill = activeSkill(a);
+    return { g, a, st, skill, agents: agentsOf(g, a), pinned: pins.has(g.path) };
   });
-  for (const [k, el] of map) if (!seen.has(k)) { el.remove(); map.delete(k); }
 }
-
-function spark(vals, max, cls = '') {
-  const w = 300, h = 44, step = w / (HIST - 1);
-  const pts = vals.map((v, i) => `${((HIST - vals.length + i) * step).toFixed(1)},${(h - Math.min(v / max, 1) * (h - 2) - 1).toFixed(1)}`).join(' ');
-  return `<svg class="spark ${cls}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline fill="none" stroke="var(--accent)" stroke-width="1.5" points="${pts}"/></svg>`;
-}
-
-const hueOf = s => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % 360; };
-const baseName = cmd => (cmd.split(' ')[0] || '').split('/').pop();
+const matches = (r, q) => !q || [r.g.name, r.g.branch, r.skill?.name, ...(r.a ? r.a.subs.map(s => s.type) : [])].some(x => x && x.toLowerCase().includes(q));
+const passes = r => (filter === 'all' || (filter === 'pinned' ? r.pinned : filter === 'working' ? ['working', 'hot'].includes(r.st) : r.st === filter)) && matches(r, query);
 
 /* ---------- XP: cada tarefa concluída por um agente vale 1 ponto ---------- */
 function countEvents(d) {
   const fresh = d.events.filter(e => e.t > xpSeen).reverse();
   fresh.forEach(e => { xp[e.path] = (xp[e.path] || 0) + 1; });
   if (d.events.length) xpSeen = Math.max(xpSeen, ...d.events.map(e => e.t));
-  if (fresh.length || xpSeen < 0) { store('wt-xp', JSON.stringify(xp)); store('wt-xp-seen', String(xpSeen)); }
+  if (fresh.length) { store('wt-xp', JSON.stringify(xp)); store('wt-xp-seen', String(xpSeen)); }
 }
 const levelOf = n => { const L = 1 + Math.floor(Math.sqrt(n)); return { L, p: (n - (L - 1) ** 2) / (L ** 2 - (L - 1) ** 2) }; };
 
-/* ---------- cartão sóbrio ---------- */
-function makeSober(g) {
-  const el = document.createElement('div');
-  el.className = 'card'; el.dataset.path = g.path; el.dataset.name = g.name;
-  el.innerHTML = `<div class="wt-head"><span class="wt-title"><button type="button" class="wt-name"></button><span class="tag" hidden>claude</span><span class="meta idle-note" hidden>sem processos</span></span><button type="button" class="pin"></button></div><div class="body"></div>`;
-  el.querySelector('.wt-name').textContent = g.name;
-  return el;
+/* ---------- gráficos e reconciliação ---------- */
+function spark(vals, w, h, color, max) {
+  if (vals.length < 2) return `<svg width="${w}" height="${h}" aria-hidden="true"></svg>`;
+  const mx = max || Math.max(...vals, 1);
+  const pts = vals.map((v, i) => `${(i * (w / (vals.length - 1))).toFixed(1)},${(h - 2 - Math.min(v / mx, 1) * (h - 4)).toFixed(1)}`).join(' ');
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" fill="none" aria-hidden="true"><polyline points="${pts}" stroke="${color}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
 }
-function updateSober(el, g) {
-  setCommon(el, g);
-  const h = hist[g.path] || [], mh = memHist[g.path] || [], ev = lastDone[g.path];
-  el.querySelector('.body').innerHTML = `
-    <div class="nums">
-      <div class="num"><b>${g.cpu.toFixed(0)}%</b><span>CPU (100% = 1 core)</span></div>
-      <div class="num"><b>${fmtB(g.rss)}</b><span>memória (${(100 * g.rss / data.mem.total).toFixed(1)}% da RAM)</span></div>
-      <div class="num"><b>${g.nproc}</b><span>processos</span></div>
-      <div class="num"><b>${g.threads}</b><span>threads</span></div>
-    </div>
-    <div class="sparks">
-      <div><small>CPU · 60s</small>${spark(h, Math.max(100, ...h))}</div>
-      <div><small>Memória · 60s</small>${spark(mh, Math.max(1e8, ...mh), 'mem')}</div>
-    </div>
-    ${ev ? `<div class="done" title="${esc(ev.msg)}">✔ ${clock(ev.t)} · ${esc(ev.msg.slice(0, 140))}</div>` : ''}
-    <div class="meta">afinidade: ${esc(g.aff.join(' | ') || '—')} · cores ativos: ${g.cores_in_use.join(', ') || '—'}</div>
-    <table>${g.procs.map(p => `<tr><td class="n">${p.pid}</td><td class="cmd" title="${esc(p.cmd)}">${esc(p.cmd)}</td><td class="n">${p.pct.toFixed(0)}%</td><td class="n">${fmtB(p.rss)}</td><td class="n">c${p.cpu}</td></tr>`).join('')}</table>`;
+function sync(container, items, make, update) {
+  // Reconciliação por chave: o elemento persiste, então foco e animações CSS não reiniciam a cada segundo.
+  const map = container._m || (container._m = new Map()), seen = new Set();
+  items.forEach((it, i) => {
+    const key = it.g.path; let el = map.get(key);
+    if (!el) { el = make(it); map.set(key, el); }
+    update(el, it); seen.add(key);
+    if (container.children[i] !== el) container.insertBefore(el, container.children[i] || null);
+  });
+  for (const [k, el] of map) if (!seen.has(k)) { el.remove(); map.delete(k); }
+}
+function setPin(btn, on, name) {
+  btn.classList.toggle('on', on); setHTML(btn, PIN_SVG(on));
+  btn.setAttribute('aria-pressed', on); btn.title = on ? 'Desafixar' : 'Fixar'; btn.setAttribute('aria-label', (on ? 'Desafixar ' : 'Fixar ') + name);
 }
 
-/* ---------- cartão divertido ---------- */
-const ROBOT = `<svg class="bot" viewBox="0 0 80 90" aria-hidden="true"><g class="rig">
-  <line x1="40" y1="9" x2="40" y2="19" stroke="var(--ink)" stroke-width="3"/><circle class="ant" cx="40" cy="7" r="5"/>
-  <rect class="arm l" x="10" y="60" width="11" height="18" rx="5"/><rect class="arm r" x="59" y="60" width="11" height="18" rx="5"/>
-  <rect class="body" x="22" y="58" width="36" height="22" rx="8"/>
-  <rect class="head" x="14" y="18" width="52" height="38" rx="12"/><rect class="visor" x="20" y="26" width="40" height="20" rx="8"/>
-  <g class="eyes"><circle cx="31" cy="36" r="5"/><circle cx="49" cy="36" r="5"/></g>
-  <g class="eyes-closed"><path d="M26 37h10M44 37h10"/></g>
-  <path class="mouth" d="M33 48q7 4 14 0"/></g><rect class="desk" x="4" y="80" width="72" height="7" rx="3.5"/></svg>`;
-
-function makeFun(g) {
+/* ---------- tabela (visão geral) ---------- */
+function makeRow(r) {
   const el = document.createElement('div');
-  el.className = 'card'; el.dataset.path = g.path; el.dataset.name = g.name; el.dataset.state = 'sleep';
-  el.style.setProperty('--hue', hueOf(g.path));
-  el.innerHTML = `<div class="wt-head"><span class="wt-title"><button type="button" class="wt-name"></button><span class="tag" hidden>claude</span></span><button type="button" class="pin"></button></div>
-    <div class="stage"><div class="bubble"></div>${ROBOT}<div class="zzz">z Z</div><div class="sweat">💧</div>
-      <div class="confetti">${[1, 2, 3, 4, 5, 6, 7, 8].map(n => `<i style="--n:${n}"></i>`).join('')}</div></div>
-    <div class="stat"><span>⚡ CPU</span><div class="track"><i class="cpu"></i></div><span class="v cpuv"></span></div>
-    <div class="stat"><span>🧠 RAM</span><div class="track"><i class="ram"></i></div><span class="v ramv"></span></div>
-    <div class="stat"><span class="lvl"></span><div class="track"><i class="xp"></i></div><span class="v xpv"></span></div>
-    <div class="chips"></div>`;
-  el.querySelector('.wt-name').textContent = g.name;
+  el.className = 'row'; el.dataset.path = r.g.path; el.dataset.name = r.g.name;
+  el.innerHTML = `<button type="button" class="pin"></button><div class="wt"><button type="button" class="wt-name"></button><div class="branch mono"></div></div>
+    <div class="c-st"></div><div class="c-ag"></div><div class="c-sk"></div><div class="c-cpu"></div><div class="c-mem"></div><div class="c-sp"></div>`;
+  el.querySelector('.wt-name').textContent = r.g.name;
   return el;
 }
-function stateOf(g) {
-  const c = data.cfg, ev = lastDone[g.path];
-  if (g.rss >= c.mem_bytes || g.cpu >= c.cpu_pct) return 'hot';
-  if (ev && data.t - ev.t < 12) return 'done';
-  return g.cpu >= 5 ? 'work' : 'sleep';
+function updateRow(el, r) {
+  const { g } = r, color = r.st === 'hot' ? 'var(--hot)' : r.st === 'idle' ? 'var(--idle)' : 'var(--work)';
+  el.classList.toggle('sel', g.path === drawerPath);
+  setPin(el.querySelector('.pin'), r.pinned, g.name);
+  el.querySelector('.branch').textContent = g.branch || (g.idle ? 'sem processos' : '');
+  setHTML(el.querySelector('.c-st'), badge(r.st));
+  const shown = r.agents.slice(0, 4), more = r.agents.length - shown.length, subs = r.agents.filter(x => !x.main).length;
+  setHTML(el.querySelector('.c-ag'), r.agents.length ? `<div class="stack">${shown.map(x => `<span class="av${x.main ? ' main' : ''}" title="${esc(x.title)}">${esc(x.letter)}</span>`).join('')}<small>${more > 0 ? `+${more}` : subs ? `+${subs} sub` : ''}</small></div>` : '<span class="faint">—</span>');
+  setHTML(el.querySelector('.c-sk'), r.skill ? `<span class="skill mono" title="${esc(r.skill.name)}">${esc(r.skill.name)}</span>` : '<span class="faint">—</span>');
+  setHTML(el.querySelector('.c-cpu'), `<div class="meter"><div class="bar"><i style="width:${Math.min(100, g.cpu / 4)}%;background:${color}"></i></div><span>${g.cpu.toFixed(0)}%</span></div>`);
+  setHTML(el.querySelector('.c-mem'), `${(g.rss / 1e9).toFixed(1)} <span class="faint">GB</span>`);
+  setHTML(el.querySelector('.c-sp'), spark(hist[g.path] || [], 88, 28, color, Math.max(100, ...(hist[g.path] || [0]))));
 }
-function updateFun(el, g) {
-  setCommon(el, g);
-  const st = stateOf(g), top = g.procs[0], ev = lastDone[g.path], n = xp[g.path] || 0, { L, p } = levelOf(n);
-  el.dataset.state = st;
-  el.style.setProperty('--spd', Math.max(0.3, 1.2 - g.cpu / 400).toFixed(2) + 's');
-  el.querySelector('.bubble').textContent =
-    st === 'done' ? '✔ ' + (ev.msg.slice(0, 90) || 'Tarefa concluída!') :
-    st === 'hot' ? 'Tô suando aqui…' :
-    st === 'work' ? `rodando ${baseName(top.cmd) || 'algo'}…` :
+
+/* ---------- Arena ---------- */
+const ROBOT = `<svg width="88" height="106" viewBox="0 0 80 96" fill="none" aria-hidden="true">
+  <line x1="40" y1="7" x2="40" y2="16" stroke="var(--border2)" stroke-width="2.5" stroke-linecap="round"/><circle cx="40" cy="5" r="3.5" fill="currentColor"/>
+  <rect x="12" y="16" width="56" height="40" rx="12" fill="var(--elev)" stroke="var(--border2)"/><rect x="19" y="24" width="42" height="24" rx="8" fill="#050507"/>
+  <rect class="eye" x="27" y="30" width="8" height="8" rx="2"/><rect class="eye" x="45" y="30" width="8" height="8" rx="2"/>
+  <rect x="12" y="62" width="7" height="20" rx="3.5" fill="var(--elev)" stroke="var(--border2)"/><rect x="61" y="62" width="7" height="20" rx="3.5" fill="var(--elev)" stroke="var(--border2)"/>
+  <rect x="22" y="60" width="36" height="28" rx="9" fill="var(--elev)" stroke="var(--border2)"/><rect x="33" y="70" width="14" height="4" rx="2" fill="currentColor"/>
+  <g class="badge-done"><circle cx="66" cy="12" r="9" fill="var(--work)"/><path d="M61.5 12.3l3 3 5-5.6" stroke="var(--accent-ink)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
+  <g class="q"><circle cx="66" cy="12" r="9" fill="var(--wait)"/><text x="66" y="16.5" text-anchor="middle" font-size="12" font-weight="700" fill="#1a1100">?</text></g></svg>`;
+function makeStation(r) {
+  const el = document.createElement('section');
+  el.className = 'card st'; el.dataset.path = r.g.path; el.dataset.name = r.g.name; el.dataset.state = 'idle';
+  el.innerHTML = `<div class="hd"><button type="button" class="wt-name"></button><span class="stb"></span><span class="r"></span><button type="button" class="pin"></button></div>
+    <div class="stage"><div class="bub"></div><div class="layer"></div><div class="char">${ROBOT}</div><div class="typing" aria-hidden="true"><i></i><i></i><i></i></div><div class="lbl">agente principal</div></div>
+    <div class="stats"></div>`;
+  el.querySelector('.wt-name').textContent = r.g.name;
+  return el;
+}
+function stageLayer(r) {
+  const subs = r.a ? r.a.subs.filter(s => s.running || nowSec() - s.mtime < 600).slice(0, 3) : [];
+  const tops = { 0: [], 1: [74], 2: [44, 104], 3: [14, 74, 134] }[subs.length];
+  const path = top => `M170 112 C 270 112, 300 ${top + 22}, 396 ${top + 22}`;
+  let h = '';
+  subs.forEach((s, i) => {
+    const top = tops[i], c = s.running ? 'var(--work)' : 'var(--idle)';
+    const recent = r.a.talk.filter(t => (t.from === s.type || t.to === s.type) && nowSec() - t.t < 40).pop();
+    h += `<svg class="links" width="628" height="196" viewBox="0 0 628 196" fill="none" aria-hidden="true"><path d="${path(top)}" stroke="var(--border2)" stroke-width="1.5"/></svg>`;
+    if (recent) h += `<span class="pkt" style="offset-path:path('${path(top)}');animation-direction:${recent.from === 'principal' ? 'normal' : 'reverse'}"></span>`;
+    h += `<div class="sub" style="top:${top}px;opacity:${s.running ? 1 : .7}"><svg width="44" height="44" viewBox="0 0 48 48" fill="none" aria-hidden="true"><line x1="24" y1="2" x2="24" y2="8" stroke="var(--border2)" stroke-width="2" stroke-linecap="round"/><circle cx="24" cy="2.5" r="2.5" fill="${c}"/><rect x="4" y="8" width="40" height="34" rx="10" fill="var(--elev)" stroke="var(--border2)"/><rect x="9" y="14" width="30" height="20" rx="6" fill="#050507"/><rect x="15" y="21" width="6" height="6" rx="1.5" fill="${c}"/><rect x="27" y="21" width="6" height="6" rx="1.5" fill="${c}"/></svg><div><b>${esc(s.type)}</b><small style="color:${c}">${s.running ? 'Executando' : 'Concluído'}</small></div></div>`;
+  });
+  return h;
+}
+function updateStation(el, r) {
+  const { g } = r, done = lastDone[g.path] && nowSec() - lastDone[g.path].t < 12, state = done ? 'done' : r.st;
+  const n = xp[g.path] || 0, { L, p } = levelOf(n), ev = lastDone[g.path];
+  el.dataset.state = state;
+  setPin(el.querySelector('.pin'), r.pinned, g.name);
+  setHTML(el.querySelector('.stb'), badge(r.st));
+  el.querySelector('.r').textContent = `Nv ${L} · ${n} tarefa${n === 1 ? '' : 's'}`;
+  const talk = r.a && r.a.talk[r.a.talk.length - 1], fresh = talk && nowSec() - talk.t < 60;
+  el.querySelector('.bub').textContent =
+    state === 'done' ? '✔ ' + (ev.msg.slice(0, 80) || 'Tarefa concluída!') :
+    state === 'hot' ? 'No limite — veja CPU e memória.' :
+    state === 'waiting' ? 'Aguardando a sua resposta.' :
+    state === 'working' ? (fresh ? `${talk.from} → ${talk.to}: ${talk.msg}`.slice(0, 70) : `rodando ${baseName(g.procs[0]?.cmd || '') || 'algo'}…`) :
     g.idle ? 'sem processos' : 'zzz… aguardando';
-  el.querySelector('.cpu').style.width = Math.min(100, 100 * g.cpu / data.cfg.cpu_pct) + '%';
-  el.querySelector('.cpuv').textContent = g.cpu.toFixed(0) + '%';
-  el.querySelector('.ram').style.width = Math.min(100, 100 * g.rss / data.cfg.mem_bytes) + '%';
-  el.querySelector('.ramv').textContent = fmtB(g.rss);
-  el.querySelector('.lvl').textContent = '⭐ Nv ' + L;
-  el.querySelector('.xp').style.width = (p * 100).toFixed(0) + '%';
-  el.querySelector('.xpv').textContent = n + ' tarefa' + (n === 1 ? '' : 's');
-  el.querySelector('.chips').innerHTML = g.cores_in_use.map(c => `<b class="on">core ${c}</b>`).join('') || (g.idle ? '' : '<b>em repouso</b>');
+  setHTML(el.querySelector('.layer'), stageLayer(r));
+  const bar = (label, v, w, c) => `<div><div class="h"><span>${label}</span><span>${v}</span></div><div class="bar"><i style="width:${Math.min(100, w)}%;background:${c}"></i></div></div>`;
+  setHTML(el.querySelector('.stats'),
+    bar('CPU', g.cpu.toFixed(0) + '%', 100 * g.cpu / data.cfg.cpu_pct, state === 'hot' ? 'var(--hot)' : 'var(--work)') +
+    bar('Memória', fmtB(g.rss), 100 * g.rss / data.cfg.mem_bytes, state === 'hot' ? 'var(--hot)' : 'var(--muted)') +
+    bar(`XP até o Nv ${L + 1}`, (p * 100).toFixed(0) + '%', p * 100, 'var(--wait)'));
 }
 
-function setCommon(el, g) {
-  const on = pins.has(g.path), pin = el.querySelector('.pin');
-  el.classList.toggle('pinned', on); el.classList.toggle('idle', !!g.idle);
-  el.querySelector('.tag').hidden = !g.claude;
-  const note = el.querySelector('.idle-note'); if (note) note.hidden = !g.idle;
-  pin.classList.toggle('on', on); pin.textContent = on ? '★' : '☆';
-  pin.setAttribute('aria-pressed', on); pin.title = on ? 'Desafixar' : 'Fixar';
-  pin.setAttribute('aria-label', (on ? 'Desafixar ' : 'Fixar ') + g.name);
+/* ---------- gaveta ---------- */
+const TABS = [['overview', 'Visão geral'], ['agents', 'Agentes'], ['activity', 'Atividade'], ['procs', 'Processos']];
+function openDrawer(path, opener) {
+  drawerPath = path; drawerOpener = opener;
+  $('drawer').hidden = false; $('scrim').hidden = false; $('dclose').focus();
+  renderDrawer(); pollActivity();
+}
+function closeDrawer() {
+  drawerPath = null; $('drawer').hidden = true; $('scrim').hidden = true;
+  if (drawerOpener && document.contains(drawerOpener)) drawerOpener.focus();
+  if (data) render(data);
+}
+function topology(r) {
+  const a = r.a, now = nowSec();
+  const subs = a.subs.filter(s => s.running || now - s.mtime < 600).slice(0, 6), n = subs.length, sp = n <= 3 ? 100 : 84;
+  const H = n ? (n - 1) * sp + 84 : 96, mainTop = n ? H / 2 - 48 : 0, mc = mainTop + 48;
+  const path = i => `M180 ${mc} C 248 ${mc}, 248 ${i * sp + 42}, 316 ${i * sp + 42}`;
+  let h = `<div class="topo" style="height:${H + 32}px"><div class="in" style="height:${H}px">`;
+  subs.forEach((s, i) => { h += `<svg class="links" width="608" height="${H}" viewBox="0 0 608 ${H}" fill="none" aria-hidden="true"><path d="${path(i)}" stroke="${s.running ? 'var(--border2)' : 'var(--border)'}" stroke-width="1.5"${s.running ? '' : ' stroke-dasharray="4 4"'}/></svg>`; });
+  subs.forEach((s, i) => {
+    const recent = a.talk.filter(t => (t.from === s.type || t.to === s.type) && now - t.t < 40).pop();
+    if (recent) h += `<span class="pkt" style="offset-path:path('${path(i)}');animation-direction:${recent.from === 'principal' ? 'normal' : 'reverse'}"></span>`;
+  });
+  h += `<div class="node main" style="top:${mainTop}px"><div class="n"><span class="l">M</span><b>Principal</b><span class="m mono">${esc(r.g.claude ? 'claude' : '')}</span></div>
+    <div class="s" style="color:${STATUS[r.st][1]}"><span class="dot"></span>${r.st === 'working' ? (n ? 'Orquestrando' : 'Trabalhando') : STATUS[r.st][0]}</div>
+    <div class="tool mono">${n ? `${subs.filter(s => s.running).length} subagente(s) ativos` : 'sem subagentes'}</div></div>`;
+  subs.forEach((s, i) => {
+    const c = s.running ? 'var(--work)' : 'var(--idle)';
+    h += `<div class="node sub" style="top:${i * sp}px;opacity:${s.running ? 1 : .75}"><div class="n"><span class="l">${esc((s.type[0] || '?').toUpperCase())}</span><b>${esc(s.type)}</b><span class="m mono">${esc(s.model)}</span></div>
+      <div class="s" style="color:${c}"><span class="dot"></span>${s.running ? 'Executando' : 'Concluído'}<span class="faint">· ${ago(s.mtime)}</span></div><div class="tool mono">${esc(s.tool || s.desc)}</div></div>`;
+  });
+  return h + '</div></div>';
+}
+function agentsTab(r) {
+  const a = r.a;
+  if (!r.g.claude && !(a && a.found)) return '<div class="empty">Nenhuma sessão do Claude encontrada neste worktree.</div>';
+  if (!a || !a.found) return '<div class="empty">Carregando a sessão…</div>';
+  const sk = activeSkill(a) || a.skill, running = a.subs.filter(s => s.running).length;
+  let h = `<section><h3>Skill ${activeSkill(a) ? 'ativa' : 'mais recente'}</h3>` + (sk
+    ? `<div class="skillcard"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg></span>
+       <div style="flex:1;min-width:0"><div class="mono" style="font-size:13px;font-weight:500">${esc(sk.name)}</div></div><span class="faint" style="font-size:12px">${ago(sk.t)}</span></div>`
+    : '<div class="muted" style="font-size:13px">Nenhuma skill invocada nesta sessão.</div>') + '</section>';
+  h += `<section><h3><span>Agentes · ${1 + running} em execução</span><span>${a.talk.filter(t => nowSec() - t.t < 40).length ? 'conversando agora' : ''}</span></h3>${topology(r)}</section>`;
+  h += `<section><h3>Conversa entre agentes</h3>` + (a.talk.length
+    ? `<div class="talk">${a.talk.slice(-8).map(m => `<div><span class="faint mono">${clock(m.t)}</span><span class="muted mono">${esc(m.from)} <span class="faint">→</span> ${esc(m.to)}</span><b style="font-weight:500;color:${m.kind === 'Concluiu' ? 'var(--work)' : m.kind === 'Falhou' ? 'var(--hot)' : m.kind === 'Mensagem' ? 'var(--wait)' : 'var(--muted)'}">${m.kind}</b><span class="ov" title="${esc(m.msg)}">${esc(m.msg)}</span></div>`).join('')}</div>`
+    : '<div class="muted" style="font-size:13px">Sem mensagens entre agentes nesta sessão.</div>') + '</section>';
+  return h;
+}
+const LABEL = { user: 'VOCÊ', text: 'AGENTE', tool: 'FERRAMENTA', result: 'RESULTADO' };
+function feedItems(lines) {
+  const out = [];
+  for (const l of lines) {
+    let e; try { e = JSON.parse(l); } catch { continue; }
+    for (const b of blocks(e)) {
+      const who = b.role === 'user' ? 'user' : 'text', ts = e.timestamp ? new Date(e.timestamp).toLocaleTimeString('pt-BR') : '';
+      if (b.type === 'text' && b.text?.trim()) out.push({ k: who, s: brief(b.text.trim(), 600), ts });
+      else if (b.type === 'tool_use') out.push({ k: 'tool', s: `${b.name}  ${summarize(b.input)}`, ts });
+      else if (b.type === 'tool_result') out.push({ k: 'result', s: brief((typeof b.content === 'string' ? b.content : Array.isArray(b.content) ? b.content.map(x => x.text || '').join(' ') : '').trim(), 200), ts });
+    }
+  }
+  return out.slice(-40);
+}
+function activityTab(r) {
+  if (!r.a || !r.a.found) return '<div class="empty">Nenhuma transcrição do Claude encontrada para este worktree.</div>';
+  return `<div class="feed">${feedItems(r.a.lines).map(i => `<div class="it ${i.k}"><span class="k">${LABEL[i.k]}</span>${esc(i.s)}${i.ts ? `<time>${i.ts}</time>` : ''}</div>`).join('') || 'Sessão sem atividade recente.'}</div>`;
+}
+function overviewTab(r) {
+  const g = r.g, c = r.st === 'hot' ? 'var(--hot)' : 'var(--work)';
+  const card = (l, v, extra = '') => `<div class="card"><div class="faint" style="font-size:12.5px">${l}</div><div style="font-size:22px;font-weight:600;letter-spacing:-.02em;margin-top:4px">${v}</div>${extra}</div>`;
+  return `<div class="grid2">${card('CPU', g.cpu.toFixed(0) + '%', spark(hist[g.path] || [], 240, 32, c, Math.max(100, ...(hist[g.path] || [0]))))}${card('Memória', fmtB(g.rss), spark(memHist[g.path] || [], 240, 32, 'var(--muted)', Math.max(1e8, ...(memHist[g.path] || [0]))))}${card('Processos', g.nproc)}${card('Threads', g.threads)}</div>
+    <div class="muted" style="font-size:13px">Afinidade: <span class="mono">${esc(g.aff.join(' | ') || '—')}</span> · cores ativos: <span class="mono">${g.cores_in_use.join(', ') || '—'}</span></div>`;
+}
+function procsTab(r) {
+  const g = r.g;
+  return g.procs.length ? `<table>${g.procs.map(p => `<tr><td class="n mono">${p.pid}</td><td class="c mono" title="${esc(p.cmd)}">${esc(p.cmd)}</td><td class="n">${p.pct.toFixed(0)}%</td><td class="n">${fmtB(p.rss)}</td><td class="n mono">c${p.cpu}</td></tr>`).join('')}</table>` : '<div class="empty">Nenhum processo ativo neste worktree.</div>';
+}
+function renderDrawer() {
+  if (!drawerPath || !data) return;
+  const r = rowsFor(data).find(x => x.g.path === drawerPath); if (!r) return;
+  const g = r.g;
+  $('dtitle').textContent = g.name; $('dbranch').textContent = g.branch; $('dbranch').hidden = !g.branch;
+  setHTML($('dstatus'), badge(r.st)); setPin($('dpin'), r.pinned, g.name);
+  setHTML($('dsub'), `<span class="mono">${esc(g.path.replace(/^\/home\/[^/]+/, '~'))}</span>${r.a && r.a.session ? ` · sessão ${esc(String(r.a.session).slice(0, 8))}` : ''}`);
+  setHTML($('tabs'), TABS.map(([k, l]) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${tab === k}">${l}</button>`).join(''));
+  const body = { overview: overviewTab, agents: agentsTab, activity: activityTab, procs: procsTab }[tab](r);
+  const box = $('dbody'), first = box._tab !== tab, atEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+  box._tab = tab;
+  if (box._h !== body) { setHTML(box, body); if (tab === 'activity' && (atEnd || first)) box.scrollTop = box.scrollHeight; }
 }
 
 /* ---------- render principal ---------- */
 let lastDone = {};
 function render(d) {
   data = d;
-  const n = d.cores.length;
-  $('sub').textContent = `raiz: ${d.root} · ${d.groups.length} worktree(s) com processos · atualiza a cada 1s`;
-  $('cores').innerHTML = d.cores.map((u, i) => {
-    const used = d.groups.filter(g => g.cores_in_use.includes(i)).map(g => g.name).join(', ');
-    return `<div class="core" title="${esc(used)}"><div class="bar"><i style="height:${u}%;${u > 85 ? 'background:var(--hot)' : u > 60 ? 'background:var(--warn)' : ''}"></i></div>${i}<br>${u.toFixed(0)}%</div>`;
-  }).join('');
-  const usedMem = d.mem.total - d.mem.avail, usedPct = 100 * usedMem / d.mem.total;
-  $('sys').innerHTML =
-    `<div class="num"><b>${fmtB(usedMem)}</b><span>de ${fmtB(d.mem.total)} (${usedPct.toFixed(0)}%)</span></div>` +
-    `<div class="num"><b>${d.load.map(x => x.toFixed(2)).join(' ')}</b><span>load 1/5/15 · ${n} cpus</span></div>`;
-  const bar = $('sysbar');
-  bar.style.width = usedPct + '%';
-  bar.style.background = usedPct >= d.cfg.sys_pct ? 'var(--hot)' : usedPct >= d.cfg.sys_pct - 15 ? 'var(--warn)' : 'var(--accent)';
-  $('sysmeta').textContent = `livre: ${fmtB(d.mem.avail)} · worktrees somam ${fmtB(d.groups.reduce((a, g) => a + g.rss, 0))}`;
-  $('thr').textContent = `· CPU ≥ ${d.cfg.cpu_pct}% por ${d.cfg.cpu_secs}s · mem ≥ ${(d.cfg.mem_bytes / 1e9).toFixed(1)} GB · sistema ≥ ${d.cfg.sys_pct}%`;
-  $('alerts').innerHTML = d.alerts.length
-    ? d.alerts.map(a => `<li><time>${clock(a.t)}</time>${esc(a.msg)}</li>`).join('')
-    : '<li style="color:var(--mute)">nenhum alerta disparado</li>';
-  $('events').innerHTML = d.events.length
-    ? d.events.map(e => `<li><time>${clock(e.t)}</time><b>${esc(e.name)}</b>${e.session ? ` <span class="meta">#${esc(e.session)}</span>` : ''}<div class="msg">${esc(e.msg.slice(0, 220) || 'Tarefa concluída')}</div></li>`).join('')
-    : '<li style="color:var(--mute)">aguardando a conclusão de uma tarefa…</li>';
-
-  lastDone = {};
-  d.events.forEach(e => { if (!(e.path in lastDone)) lastDone[e.path] = e; });
+  const n = d.cores.length, fun = mode === 'fun';
+  $('root').textContent = d.root.replace(/^\/home\/[^/]+/, '~');
+  $('live').textContent = 'Ao vivo · 1 s';
+  lastDone = {}; d.events.forEach(e => { if (!(e.path in lastDone)) lastDone[e.path] = e; });
   countEvents(d);
   d.groups.forEach(g => {
     hist[g.path] = (hist[g.path] || []).concat(g.cpu).slice(-HIST);
     memHist[g.path] = (memHist[g.path] || []).concat(g.rss).slice(-HIST);
   });
+  const all = rowsFor(d), shown = all.filter(passes);
+  const total = all.reduce((s, r) => s + r.agents.length, 0), mains = all.filter(r => r.g.claude).length;
+  const cpuAvg = d.cores.reduce((a, b) => a + b, 0) / n, usedMem = d.mem.total - d.mem.avail, usedPct = 100 * usedMem / d.mem.total;
+  const startDay = new Date(); startDay.setHours(0, 0, 0, 0);
+  const today = d.events.filter(e => e.t >= startDay / 1000).length;
+  [['agents', total], ['cpu', cpuAvg], ['mem', usedMem / 1e9], ['tasks', today]].forEach(([k, v]) => { kHist[k] = kHist[k].concat(v).slice(-40); });
 
-  const list = viewList(d), fun = mode === 'fun';
-  $('grid').hidden = fun; $('arena').hidden = !fun; $('summary').hidden = !fun;
-  $('empty').hidden = list.length > 0;
-  $('empty').textContent = onlyPinned ? 'Nenhum worktree fixado. Clique na ☆ de um cartão para fixar.' : 'Nenhum processo encontrado em worktrees sob a raiz.';
-  if (fun) {
-    sync($('arena'), list, makeFun, updateFun);
-    const st = list.map(stateOf), cnt = s => st.filter(x => x === s).length;
-    $('summary').innerHTML = `<span>🛠️ ${cnt('work')} trabalhando</span><span>😴 ${cnt('sleep')} dormindo</span><span>🎉 ${cnt('done')} acabaram de terminar</span><span>🔥 ${cnt('hot')} no limite</span><span>🏆 ${Object.values(xp).reduce((a, b) => a + b, 0)} tarefas no total</span>`;
+  if (!fun) {
+    const waiting = all.filter(r => r.st === 'waiting').length;
+    $('sub').textContent = `${all.filter(r => r.g.nproc).length} com atividade · ${total} agentes ativos · ${waiting} aguardando você`;
+    const cnt = k => all.filter(r => k === 'all' ? true : k === 'pinned' ? r.pinned : k === 'working' ? ['working', 'hot'].includes(r.st) : r.st === k).length;
+    setHTML($('filters'), [['all', 'Todos'], ['working', 'Trabalhando'], ['waiting', 'Aguardando'], ['idle', 'Ociosos'], ['pinned', 'Fixados']].map(([k, l]) => `<button type="button" class="chip" data-filter="${k}" aria-pressed="${filter === k}">${l}<span>${cnt(k)}</span></button>`).join(''));
+    const top = [...d.groups].sort((a, b) => b.cpu - a.cpu)[0];
+    const kpi = (label, val, unit, note, vals, color, delta = '') => `<div class="card kpi"><div class="top"><span>${label}</span><span class="faint">${delta}</span></div><div class="mid"><div><b>${val}</b><span class="unit">${unit}</span></div>${spark(vals, 96, 30, color)}</div><div class="note">${note}</div></div>`;
+    setHTML($('kpis'),
+      kpi('Agentes ativos', total, '', `${mains} principais · ${total - mains} subagentes`, kHist.agents, 'var(--work)') +
+      kpi('CPU', cpuAvg.toFixed(0), `% de ${n} cores`, top ? `maior uso: ${esc(top.name)}` : '—', kHist.cpu, 'var(--muted)') +
+      kpi('Memória', (usedMem / 1e9).toFixed(1), `de ${(d.mem.total / 1e9).toFixed(0)} GB`, `${fmtB(d.mem.avail)} livres`, kHist.mem, 'var(--muted)', usedPct.toFixed(0) + '%') +
+      kpi('Tarefas hoje', today, '', d.events[0] ? `última ${ago(d.events[0].t)}` : 'nenhuma ainda', kHist.tasks, 'var(--work)'));
+    setHTML($('events'), d.events.length ? d.events.slice(0, 5).map(e => `<div class="li"><div class="h"><b style="font-weight:500">${esc(e.name)}</b><span class="faint">${ago(e.t)}</span></div><p>${esc(e.msg.slice(0, 160) || 'Tarefa concluída')}</p></div>`).join('') : '<div class="li faint">aguardando a conclusão de uma tarefa…</div>');
+    $('thr').textContent = `· CPU ≥ ${d.cfg.cpu_pct}% · mem ≥ ${(d.cfg.mem_bytes / 1e9).toFixed(1)} GB`;
+    setHTML($('alerts'), d.alerts.length ? d.alerts.map(a => `<div class="li" style="display:flex;gap:10px"><span class="dot" style="background:var(--hot);margin-top:7px"></span><div><div style="font-weight:500">${esc(a.msg)}</div><div class="faint">${clock(a.t)}</div></div></div>`).join('') : '<div class="li faint">nenhum alerta disparado</div>');
+    setHTML($('cores'), d.cores.map((u, i) => `<i title="core ${i}: ${u.toFixed(0)}%" style="background:color-mix(in srgb,${u > 85 ? 'var(--hot)' : u > 60 ? 'var(--wait)' : 'var(--work)'} ${Math.max(12, Math.round(u))}%,var(--border))"></i>`).join(''));
+    sync($('rows'), shown, makeRow, updateRow);
+    $('empty').hidden = shown.length > 0;
+    $('empty').textContent = filter === 'pinned' ? 'Nenhum worktree fixado. Clique na ☆ de uma linha para fixar.' : query ? 'Nada encontrado para essa busca.' : 'Nenhum processo encontrado em worktrees sob a raiz.';
   } else {
-    sync($('grid'), list, makeSober, updateSober);
+    const st = shown.map(r => lastDone[r.g.path] && nowSec() - lastDone[r.g.path].t < 12 ? 'done' : r.st), c = s => st.filter(x => x === s).length;
+    setHTML($('chips'), [['var(--work)', `${c('working')} trabalhando`], ['var(--wait)', `${c('waiting')} aguardando você`], ['var(--hot)', `${c('hot')} no limite`], ['var(--muted)', `${today} tarefas hoje`]].map(([col, l]) => `<span class="pill"><span class="dot" style="background:${col}"></span>${l}</span>`).join(''));
+    sync($('stations'), shown, makeStation, updateStation);
+    $('aempty').hidden = shown.length > 0; $('aempty').textContent = 'Nenhum worktree para mostrar.';
   }
-  refreshDrawerStatic();
-}
-
-/* ---------- gaveta de preview ---------- */
-let drawerPath = null, drawerOpener = null;
-function openDrawer(path, name, opener) {
-  drawerPath = path; drawerOpener = opener;
-  $('dtitle').textContent = name; $('dfeed').textContent = 'carregando…';
-  $('drawer').hidden = false; $('dclose').focus();
-  refreshDrawerStatic(); refreshFeed(true);
-}
-function closeDrawer() {
-  drawerPath = null; $('drawer').hidden = true;
-  if (drawerOpener && document.contains(drawerOpener)) drawerOpener.focus();
-}
-function refreshDrawerStatic() {
-  if (!drawerPath || !data) return;
-  const g = data.groups.find(x => x.path === drawerPath);
-  $('dmeta').textContent = g ? `${g.nproc} processos · ${g.threads} threads · CPU ${g.cpu.toFixed(0)}% · ${fmtB(g.rss)} · afinidade ${g.aff.join(' | ') || '—'}` : 'nenhum processo ativo neste worktree';
-  $('dprocs').innerHTML = g ? g.procs.map(p => `<tr><td class="n">${p.pid}</td><td class="cmd" style="max-width:260px" title="${esc(p.cmd)}">${esc(p.cmd)}</td><td class="n">${p.pct.toFixed(0)}%</td><td class="n">${fmtB(p.rss)}</td></tr>`).join('') : '';
-}
-const brief = (v, n) => { v = typeof v === 'string' ? v : JSON.stringify(v ?? ''); return v.length > n ? v.slice(0, n) + '…' : v; };
-function summarize(i) {
-  if (!i || typeof i !== 'object') return brief(i, 120);
-  for (const k of ['command', 'file_path', 'pattern', 'path', 'url', 'description', 'prompt', 'query']) if (i[k]) return brief(i[k], 140);
-  return brief(Object.values(i).find(v => typeof v === 'string') ?? i, 120);
-}
-function feedItems(lines) {
-  const out = [];
-  for (const l of lines) {
-    let e; try { e = JSON.parse(l); } catch { continue; }
-    const m = e.message; if (!m) continue;
-    const who = m.role === 'user' ? 'user' : 'text', c = m.content;
-    if (typeof c === 'string') { if (c.trim()) out.push({ k: who, s: brief(c.trim(), 500), t: e.timestamp }); continue; }
-    if (!Array.isArray(c)) continue;
-    for (const b of c) {
-      if (b.type === 'text' && b.text?.trim()) out.push({ k: who, s: brief(b.text.trim(), 600), t: e.timestamp });
-      else if (b.type === 'tool_use') out.push({ k: 'tool', s: `${b.name}  ${summarize(b.input)}`, t: e.timestamp });
-      else if (b.type === 'tool_result') {
-        const r = typeof b.content === 'string' ? b.content : Array.isArray(b.content) ? b.content.map(x => x.text || '').join(' ') : '';
-        out.push({ k: 'result', s: brief(r.trim(), 200), t: e.timestamp });
-      }
-    }
-  }
-  return out.slice(-40);
-}
-const LABEL = { user: 'VOCÊ', text: 'AGENTE', tool: 'FERRAMENTA', result: 'RESULTADO' };
-async function refreshFeed(first) {
-  if (!drawerPath) return;
-  const path = drawerPath, feed = $('dfeed');
-  try {
-    const r = DEMO ? demoPreview() : await (await fetch('/api/preview?path=' + encodeURIComponent(path))).json();
-    if (path !== drawerPath) return;
-    if (!r.found) { feed.textContent = 'Nenhuma transcrição do Claude encontrada para este worktree.'; return; }
-    const body = feed.closest('.dbody'), atEnd = first || body.scrollHeight - body.scrollTop - body.clientHeight < 40;
-    feed.innerHTML = feedItems(r.lines).map(i => `<div class="it ${i.k}"><span class="k">${LABEL[i.k]}</span>${esc(i.s)}${i.t ? `<time>${new Date(i.t).toLocaleTimeString('pt-BR')}</time>` : ''}</div>`).join('') || 'Sessão sem atividade recente.';
-    $('dmeta').dataset.session = r.session;
-    if (atEnd) body.scrollTop = body.scrollHeight;
-  } catch { feed.textContent = 'sem conexão com o servidor'; }
+  renderDrawer();
 }
 
 /* ---------- eventos ---------- */
 function setMode(m) {
   mode = m; store('wt-mode', m);
-  document.body.classList.toggle('fun', m === 'fun');
+  $('overview').hidden = m === 'fun'; $('arena').hidden = m !== 'fun';
   document.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === m));
   if (data) render(data);
 }
 document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
-$('onlypin').checked = onlyPinned;
-$('onlypin').addEventListener('change', e => { onlyPinned = e.target.checked; store('wt-only', onlyPinned ? '1' : '0'); if (data) render(data); });
-for (const id of ['grid', 'arena']) $(id).addEventListener('click', e => {
-  const card = e.target.closest('.card'); if (!card) return;
-  if (e.target.closest('.pin')) {
-    const p = card.dataset.path;
-    pins.has(p) ? pins.delete(p) : pins.add(p);
-    savePins(); render(data); return;
-  }
-  openDrawer(card.dataset.path, card.dataset.name, card.querySelector('.wt-name'));
+$('filters').addEventListener('click', e => { const b = e.target.closest('[data-filter]'); if (b) { filter = b.dataset.filter; store('wt-filter', filter); render(data); } });
+$('q').addEventListener('input', e => { query = e.target.value.trim().toLowerCase(); if (data) render(data); });
+function togglePin(path) { pins.has(path) ? pins.delete(path) : pins.add(path); store('wt-pins', JSON.stringify([...pins])); render(data); }
+for (const id of ['rows', 'stations']) $(id).addEventListener('click', e => {
+  const el = e.target.closest('[data-path]'); if (!el) return;
+  if (e.target.closest('.pin')) return togglePin(el.dataset.path);
+  openDrawer(el.dataset.path, el.querySelector('.wt-name'));
 });
-$('dclose').addEventListener('click', closeDrawer);
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && drawerPath) closeDrawer(); });
+$('dpin').addEventListener('click', () => togglePin(drawerPath));
+$('dclose').addEventListener('click', closeDrawer); $('scrim').addEventListener('click', closeDrawer);
+$('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) { tab = b.dataset.tab; renderDrawer(); } });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && drawerPath) closeDrawer();
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); $('q').focus(); }
+});
 
 async function tick() {
   try {
     const d = DEMO ? demoData() : await (await fetch('/api')).json();
-    if (d.groups) {
-      render(d);
-      const o = QS.get('open'); // ?open=acme/api abre a gaveta de preview (útil nas capturas de tela)
-      if (o && !tick.opened) { tick.opened = true; const c = document.querySelector(`.card[data-name="${o}"]`); if (c) openDrawer(c.dataset.path, o, null); }
-    }
-  } catch { $('sub').textContent = 'sem conexão com o servidor'; }
+    if (!d.groups) return;
+    render(d);
+    const o = QS.get('open'); // ?open=acme/api abre a gaveta (útil nas capturas de tela)
+    if (o && !tick.opened) { tick.opened = true; const g = d.groups.find(x => x.name === o); if (g) openDrawer(g.path, null); }
+  } catch { $('live').textContent = 'sem conexão'; }
 }
 setMode(mode);
-tick(); setInterval(tick, 1000); setInterval(() => refreshFeed(false), 2000);
+tick(); setInterval(tick, 1000); setInterval(pollActivity, 1000);
 </script>
 </body>
 </html>

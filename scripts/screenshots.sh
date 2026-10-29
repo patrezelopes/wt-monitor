@@ -13,10 +13,11 @@ sleep 1.5
 
 shot() { # name, query
   "$chrome" --headless=new --no-sandbox --disable-gpu --hide-scrollbars --window-size=1440,1000 \
-    --virtual-time-budget=5000 --screenshot="$PWD/docs/img/$1.png" "http://127.0.0.1:$port/?demo&$2" >/dev/null 2>&1
+    --virtual-time-budget=9000 --screenshot="$PWD/docs/img/$1.png" "http://127.0.0.1:$port/?demo&$2" >/dev/null 2>&1
   echo "docs/img/$1.png"
 }
 mkdir -p docs/img
-shot sober   "mode=sober"
-shot fun     "mode=fun"
-shot preview "mode=sober&open=acme/api"
+shot overview       "mode=sober"
+shot overview-light "mode=sober&theme=light"
+shot arena          "mode=fun"
+shot session        "mode=sober&open=acme/api&tab=agents"
