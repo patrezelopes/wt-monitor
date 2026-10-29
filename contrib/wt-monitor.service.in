@@ -6,7 +6,7 @@ ExecStart=@BIN@/wt-monitor @ROOT@ @PORT@@FLAGS@
 Restart=on-failure
 RestartSec=3
 # Alert thresholds (desktop notifications)
-Environment=WT_CPU_PCT=300 WT_CPU_SECS=20 WT_MEM_GB=4 WT_SYS_MEM_PCT=90
+Environment=WT_CPU_PCT=300 WT_CPU_SECS=20 WT_MEM_GB=4 WT_SYS_MEM_PCT=90 WT_WAIT_PCT=30 WT_WAIT_SECS=15
 
 [Install]
 WantedBy=default.target

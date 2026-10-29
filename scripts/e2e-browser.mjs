@@ -39,10 +39,11 @@ class CDP {
   }
   async until(expression, ms = 8000) { const t = Date.now(); while (Date.now() - t < ms) { try { const v = await this.eval(expression); if (v) return v; } catch { /* a página pode estar recarregando */ } await sleep(100); } return false; }
 }
+async function until(fn, ms = 6000) { const t = Date.now(); while (Date.now() - t < ms) { if (fn()) return true; await sleep(100); } return false; }
 const bufferOf = id => `(()=>{const t=TERM.panes.get(${id}).xterm;let s='';for(let i=0;i<t.buffer.active.length;i++)s+=t.buffer.active.getLine(i).translateToString(true)+'\\n';return s})()`;
 
 try {
-  procs.push(spawn(BIN, [root, String(PORT), '--terminals'], { env: { ...process.env, HOME: home, SHELL: '/bin/bash', PS1: '', WT_TOKEN_FILE: tokenFile }, stdio: 'ignore' }));
+  procs.push(spawn(BIN, [root, String(PORT), '--terminals', '--control'], { env: { ...process.env, HOME: home, SHELL: '/bin/bash', PS1: '', WT_TOKEN_FILE: tokenFile }, stdio: 'ignore' }));
   // um processo com cwd no worktree faz o worktree aparecer na lista do painel
   procs.push(spawn('sleep', ['600'], { cwd: wt, stdio: 'ignore' }));
   procs.push(spawn(CHROME, ['--headless=new', '--no-sandbox', '--disable-gpu', `--remote-debugging-port=${DBG}`, `--user-data-dir=${join(tmp, 'chrome')}`, '--window-size=1440,900', 'about:blank'], { stdio: 'ignore' }));
@@ -97,6 +98,25 @@ try {
   const list = await (await fetch(`http://127.0.0.1:${PORT}/api/terminals`, { headers: { 'X-WT': '1', 'X-WT-Token': token } })).json();
   await sleep(500);
   ok(list.terms.length === 0, 'o servidor não lista mais terminais', JSON.stringify(list.terms));
+
+  // 3) prioridade: a aba do drawer move processos de verdade (só se o sistema delega cgroups)
+  const sleepPid = procs[1].pid, cgOf = pid => { try { return readFileSync(`/proc/${pid}/cgroup`, 'utf8'); } catch { return ''; } };
+  await c.eval(`document.querySelector('[data-mode="sober"]').click()`);
+  ok(await c.until(`data && data.groups.length === 1 && data.control && data.control.enabled`), 'o painel recebe o estado do controle e do worktree');
+  if (await c.eval(`data.control.supported`)) {
+    await c.eval(`openDrawer(data.groups[0].path, null); tab = 'prio'; renderDrawer()`);
+    ok(await c.until(`!!document.querySelector('[data-cpu="baixa"]')`), 'a aba Prioridade aparece com os botões de nível');
+    const origin = cgOf(sleepPid);
+    await c.eval(`document.querySelector('[data-cpu="baixa"]').click()`);
+    ok(await c.until(`data.groups[0].ctl.cpu === 'baixa' && document.querySelector('[data-cpu="baixa"]').getAttribute('aria-pressed') === 'true'`), 'clicar em "Baixa" muda o nível e o botão fica marcado');
+    ok(await until(() => cgOf(sleepPid).includes('/wtm-')), 'o processo do worktree foi movido para o cgroup do painel');
+    ok(await c.until(`document.querySelector('.row .prio') && document.querySelector('.row .prio').textContent.includes('baixa')`), 'a linha do worktree mostra a etiqueta "↓ baixa"');
+    await c.eval(`document.querySelector('[data-high="2"]').click()`);
+    ok(await c.until(`data.groups[0].ctl.high === 2 * 2 ** 30`), 'clicar em "2 GB" define o limite suave de memória');
+    await c.eval(`document.querySelector('[data-cpu="normal"]').click(); document.querySelector('[data-high="0"]').click()`);
+    ok(await c.until(`data.groups[0].ctl.cpu === 'normal' && data.groups[0].ctl.high === 0`), 'voltar a "Normal" e "Sem limite" limpa tudo');
+    ok(await until(() => cgOf(sleepPid) === origin), 'o processo volta ao cgroup de origem', cgOf(sleepPid));
+  }
 
   await c.eval(`document.querySelector('[data-mode="sober"]').click()`);
   ok(await c.until(`!document.getElementById('overview').hidden && document.getElementById('terms').hidden`), 'voltar para a Visão geral esconde os terminais');

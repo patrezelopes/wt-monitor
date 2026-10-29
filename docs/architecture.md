@@ -8,7 +8,7 @@
                   └── alerts ──► notify-send               └── GET /api/preview ──► ~/.claude*/projects/**.jsonl
 ```
 
-Rust standard library only. `src/main.rs` holds the sampler, alerts and HTTP server; `src/terms.rs`, `src/pty.rs` and `src/ws.rs` implement the opt-in terminals. The UI is `index.html` plus the vendored xterm.js, all embedded with `include_str!`.
+Rust standard library only. `src/main.rs` holds the sampler, alerts and HTTP server; `src/terms.rs`, `src/pty.rs` and `src/ws.rs` implement the opt-in terminals; `src/sched.rs` holds contention measurement and the opt-in priority control. The UI is `index.html` plus the vendored xterm.js, all embedded with `include_str!`.
 
 ## Sampler
 
@@ -18,7 +18,11 @@ Once per second, for every PID in `/proc`:
 2. Resolve the **worktree**: the nearest ancestor containing a `.git` entry (cached per directory).
 3. Read `stat` (utime+stime, last CPU, threads), `status` (`VmRSS`, `Cpus_allowed_list`) and `cmdline`.
 
-CPU % is the delta of utime+stime between two samples over wall time (100 % = one core, `CLK_TCK` is assumed to be 100). Per-core load comes from `/proc/stat`. Results are grouped per worktree and serialised by hand into one JSON string that `GET /api` returns.
+Per process it also sums `/proc/<pid>/task/*/schedstat` (nanoseconds running and waiting in the run queue; the file of the pid alone only covers the main thread). CPU % is the delta of utime+stime between two samples over wall time (100 % = one core, `CLK_TCK` is assumed to be 100). Per-core load comes from `/proc/stat`. Results are grouped per worktree and serialised by hand into one JSON string that `GET /api` returns.
+
+## Contention (always on)
+
+Per worktree, the sampler turns the deltas of run and wait time into **queue %** = wait / (run + wait): the share of the time the worktree's threads were ready to run that they spent waiting for a core. Below 20 ms of ready time per sample the figure is reported as 0 (noise). It also reports `waiting`, the average number of cores' worth of threads that waited. The system-wide view is PSI (`/proc/pressure/{cpu,memory}`, `avg10`), `null` on kernels without it. A *CPU contended* alert fires when queue % is at least `WT_WAIT_PCT` for `WT_WAIT_SECS` and at least 0.3 cores were ready.
 
 ## Alerts
 
@@ -80,6 +84,17 @@ Routes (mutations need `X-WT: 1` + `X-WT-Token`):
 | `GET /ws/term/<id>` | WebSocket. Origin must be the dashboard's own. First message `{"token":"…"}`; then binary = keyboard, text `{"resize":[cols,rows]}`; the server sends binary output and `{"exit":N}`. |
 
 A `shell` terminal runs `$SHELL -l` (so `PATH`, `nvm` and per-folder account switching from the user's profile apply); a `claude` terminal is the same shell with `claude\n` typed. The browser keeps one xterm.js instance per terminal (`TERM.panes`), reconnects after drops, and resets and replays on reconnect. The token lives in `~/.config/wt-monitor/token` (`0600`) and reaches the browser once, through the `#token=` fragment. See [SECURITY.md](../SECURITY.md).
+
+## Priority control (opt-in)
+
+Started with `--control` (or `WT_CONTROL=1`); otherwise `/api/control*` answers 404 and `/api` reports `control.enabled: false`. It shares the terminals' token (`terms::authed`).
+
+- **Where.** At startup `sched.rs` finds the `user@UID.service` ancestor of its own cgroup (from `/proc/self/cgroup`) and probes it by creating and removing a test cgroup. systemd delegates `cpu` and `memory` there, so the panel can create children without privileges. If that fails, `control.supported` is `false` with a `reason` and nothing is touched.
+- **Desired vs applied.** `POST /api/control` (`path`, and any of `cpu=baixa|normal|alta`, `high=<GiB>`, `low=<GiB>`; 0 clears) and `POST /api/control/focus` (`path`, empty to clear) only update the desired state under a mutex. The **sampler thread** applies it every cycle (`Control::enforce`): a worktree whose effective setting is not the default gets a cgroup `wtm-<fnv64 of path>` created next to `app.slice` (so it competes as a peer of your other apps), `cpu.weight`, `memory.high` and `memory.low` written when they change, and every process of the worktree moved in through `cgroup.procs` (the panel's own pid is never moved). Focus overrides the CPU level: the focused worktree gets weight 1000, the others 20.
+- **Reverting.** For every process moved, the cgroup it came from is remembered. Returning to normal writes each pid back there, resets the files to neutral values and removes the empty cgroup. Leftovers of a previous run are reset at startup; those that still hold processes stay with neutral weights and are reused.
+- **Terminals.** `Terms::create` calls `Control::on_spawn(pid)` right after the fork and before `claude` is typed, so a terminal starts inside its worktree's cgroup and `memory.high` covers everything it launches.
+- **Never `memory.max`.** The only memory knobs are `memory.high` (throttle) and `memory.low` (protect); exceeding a limit slows a worktree, never kills it. Memory a process already allocated is not charged to a cgroup it joins, so limits cover future growth for existing processes.
+- The JSON carries `control` (`enabled`, `supported`, `reason`, `mem_low`, `focus`) at the top and `ctl` (`cpu`, `want`, `weight`, `high`, `low`, `inside`, `mem`, `throttled`, `err`) per worktree. The browser shows them as tags on each row and in the drawer's *Priority* tab.
 
 ## Security
 

@@ -13,10 +13,12 @@ SERVICE  := wt-monitor.service
 CONFIG_DIRS ?=
 # Set TERMINALS=1 to let the dashboard open terminals (opt-in; see SECURITY.md)
 TERMINALS ?=
-FLAGS := $(if $(TERMINALS), --terminals)
+# Set CONTROL=1 to let the dashboard change CPU/memory priority per worktree via cgroups (opt-in; see SECURITY.md)
+CONTROL ?=
+FLAGS := $(if $(TERMINALS), --terminals)$(if $(CONTROL), --control)
 
 .DEFAULT_GOAL := help
-.PHONY: help build run open open-terminals test fmt fmt-check lint js-check check e2e \
+.PHONY: help build run open open-terminals open-control test fmt fmt-check lint js-check check e2e \
         install uninstall restart status logs linger \
         hooks hooks-uninstall hook-test screenshots clean
 
@@ -29,7 +31,7 @@ help: ## Show this help
 build: ## Build the optimized binary
 	cargo build --release
 
-run: ## Run in the foreground on ROOT/PORT (TERMINALS=1 enables terminals)
+run: ## Run in the foreground on ROOT/PORT (TERMINALS=1 / CONTROL=1 enable the opt-in features)
 	cargo run --release -- $(ROOT) $(PORT)$(FLAGS)
 
 open: ## Open the dashboard in the default browser
@@ -37,6 +39,8 @@ open: ## Open the dashboard in the default browser
 
 open-terminals: build ## Open the dashboard with the one-time terminal token in the link
 	xdg-open "http://127.0.0.1:$(PORT)/#token=$$(target/release/wt-monitor --print-token)"
+
+open-control: open-terminals ## Same link as open-terminals: the priority controls use the same token
 
 # ---- quality ----------------------------------------------------------------
 
@@ -57,8 +61,9 @@ js-check: ## Syntax-check the page script (needs node)
 
 check: fmt-check lint test js-check ## Static checks and unit tests
 
-e2e: build ## End-to-end tests: terminals over HTTP/WebSocket, and in a real Chrome (needs node)
+e2e: build ## End-to-end tests: terminals, priority control (real cgroups) and a real Chrome (needs node)
 	node scripts/e2e-terminals.mjs
+	node scripts/e2e-control.mjs
 	node scripts/e2e-browser.mjs
 
 # ---- systemd user service ---------------------------------------------------
@@ -73,7 +78,8 @@ install: build ## Build, install to PREFIX/bin and enable+start the user service
 	systemctl --user restart $(SERVICE)
 	@echo "wt-monitor running at http://127.0.0.1:$(PORT) (watching $(ROOT))"
 	@echo "Agent notifications: make hooks   |   start before login: make linger"
-	@if [ -n "$(TERMINALS)" ]; then echo "Terminals are ENABLED. Open once with: make open-terminals"; fi
+	@if [ -n "$(TERMINALS)$(CONTROL)" ]; then echo "Opt-in features ENABLED. Open once with: make open-terminals (the token is shared)"; fi
+	@if [ -n "$(CONTROL)" ]; then echo "Priority control is ON: restarting the service resets every priority to normal."; fi
 
 uninstall: ## Stop and remove the service and binary (hooks: make hooks-uninstall)
 	-systemctl --user disable --now $(SERVICE)

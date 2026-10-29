@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **CPU contention, always on.** Each worktree shows its *queue %* (the share of its ready-to-run time spent waiting for a core, from `/proc/<pid>/task/*/schedstat`) and the dashboard shows system CPU/memory pressure (PSI). New alert *CPU contended* (`WT_WAIT_PCT`, `WT_WAIT_SECS`).
+- **Priority control (opt-in, `--control` / `WT_CONTROL=1`, `make install CONTROL=1`).** A *Priority* tab in the session drawer: CPU level low / normal / high (`cpu.weight` 25 / 100 / 400), **Focus** on one worktree (1000 against 20 for the others), a soft memory limit (`memory.high`) and memory protection (`memory.low`), through cgroup v2 in the slice systemd delegates to the user. Reversible: processes go back to the cgroup they came from. Nothing is ever killed (`memory.max` is never set). Terminals opened by the panel are born inside their worktree's cgroup, so memory limits cover everything they start.
+- `GET /api/control`, `POST /api/control`, `POST /api/control/focus`, guarded by the same token as the terminals.
+- `make open-control`, `scripts/e2e-control.mjs` (moves real processes between cgroups and checks that high priority wins a shared core) and browser tests for the Priority tab.
+
+### Changed
+- The session drawer header no longer wraps the close button on long worktree names.
+
 ## [0.3.1] - 2026-10-29
 
 ### Added

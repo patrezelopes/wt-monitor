@@ -81,7 +81,7 @@
   /* gaveta */
   .scrim { position:fixed; inset:0; background:var(--scrim); z-index:9 }
   .drawer { position:fixed; top:0; right:0; bottom:0; width:min(680px,100vw); display:flex; flex-direction:column; background:var(--surface); border-left:1px solid var(--border2); box-shadow:-24px 0 48px rgba(0,0,0,.35); z-index:10 }
-  .dh { padding:18px 24px 0 } .dh .t { display:flex; align-items:center; gap:12px; flex-wrap:wrap } .dh h2 { margin:0; font-size:18px; font-weight:600; letter-spacing:-.02em; word-break:break-all }
+  .dh { padding:18px 24px 0 } .dh .t { display:flex; align-items:center; gap:10px } .dh .t > * { flex-shrink:0 } .dh h2 { margin:0; font-size:18px; font-weight:600; letter-spacing:-.02em; min-width:0; flex-shrink:1 !important; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
   .tag { display:inline-flex; align-items:center; height:22px; padding:0 8px; border:1px solid var(--border2); border-radius:6px; color:var(--muted); font-size:11.5px }
   .iconbtn { all:unset; cursor:pointer; display:grid; place-items:center; width:28px; height:28px; color:var(--muted) } .iconbtn:hover { color:var(--text) } .iconbtn:focus-visible { outline:2px solid var(--accent); border-radius:6px }
   #dpin.on { color:var(--wait) }
@@ -155,6 +155,12 @@
   .thead2 .nm { font-weight:600 } .thead2 .st { color:var(--faint); margin-left:auto }
   .tbody { flex:1; min-height:0; padding:8px 4px 4px 10px; background:var(--bg) }
   .tbody .xterm { height:100% } .tbody .xterm-viewport { background:transparent !important }
+  .prio { display:inline-flex; align-items:center; height:17px; padding:0 6px; margin-left:8px; border:1px solid var(--border2); border-radius:5px; font-size:11px; font-weight:600; color:var(--muted); vertical-align:1px }
+  .prio.up { color:var(--work); border-color:color-mix(in srgb,var(--work) 50%,var(--border)) } .prio.down { color:var(--wait); border-color:color-mix(in srgb,var(--wait) 50%,var(--border)) }
+  .branch { display:flex; align-items:center } .branch .bn { min-width:0; overflow:hidden; text-overflow:ellipsis } .branch .prio { flex-shrink:0; margin-left:6px }
+  .qwait { margin-top:3px; font-size:11.5px; color:var(--faint) } .qwait.bad { color:var(--wait); font-weight:600 }
+  .ctl { display:grid; gap:20px } .ctl h3 { margin:0 0 8px; font-size:13px; font-weight:600 } .ctl p { margin:8px 0 0; font-size:12.5px; line-height:1.5; color:var(--muted) }
+  .ctl .seg { flex-wrap:wrap } .ctl .stat { display:flex; gap:16px; flex-wrap:wrap; font-size:12.5px; color:var(--muted) } .ctl .stat b { color:var(--text); font-weight:500 }
   .tnote { padding:10px 14px; border:1px solid var(--border); border-left:3px solid var(--wait); border-radius:8px; background:var(--surface); color:var(--muted); font-size:12.5px; margin-bottom:12px }
   @keyframes travel { from { offset-distance:0% } to { offset-distance:100% } }
   @keyframes bob { 50% { transform:translateY(-3px) } } @keyframes shake { 25% { transform:translateX(-1.5px) } 75% { transform:translateX(1.5px) } }
@@ -249,6 +255,18 @@
 const QS = new URLSearchParams(location.search), DEMO = QS.has('demo');
 const DEMO_T0 = Date.now(), DEMO_ROOT = '/home/dev/projects';
 const DEMO_WT = [['acme/api', 1, 'feat/order-pagination'], ['acme/web', 1, 'feat/checkout-form'], ['acme/docs', 0, 'main'], ['tools/cli', 1, 'feat/sync-command'], ['lab/ml-experiments', 1, 'exp/lora-sweep'], ['acme/mobile', 1, 'chore/deps']];
+const DCTL = { w: { [`${DEMO_ROOT}/acme/api`]: { cpu: 'alta', high: 0, low: 0 }, [`${DEMO_ROOT}/lab/ml-experiments`]: { cpu: 'baixa', high: 4, low: 0 } }, focus: null };
+function demoCtlOf(path, nproc) {
+  const w = DCTL.w[path] || { cpu: 'normal', high: 0, low: 0 }, f = DCTL.focus;
+  const weight = f ? (f === path ? 1000 : 20) : { baixa: 25, normal: 100, alta: 400 }[w.cpu];
+  return { cpu: f ? (f === path ? 'foco' : 'fundo') : w.cpu, want: w.cpu, weight, high: w.high * 2 ** 30, low: w.low * 2 ** 30, inside: nproc, mem: w.high ? 3.4e9 : 0, throttled: w.high ? 37 : 0, err: '' };
+}
+function demoCtlPost(route, body) {
+  const q = new URLSearchParams(body), path = q.get('path');
+  if (route.endsWith('/focus')) { DCTL.focus = path || null; return; }
+  const w = DCTL.w[path] || (DCTL.w[path] = { cpu: 'normal', high: 0, low: 0 });
+  for (const k of ['cpu', 'high', 'low']) if (q.has(k)) w[k] = k === 'cpu' ? q.get(k) : Number(q.get(k));
+}
 function demoData() {
   const now = Date.now(), t = (now - DEMO_T0) / 1000, T0 = Math.floor(DEMO_T0 / 1000);
   const cycle = T0 + Math.floor(t / 30) * 30; // a cada 30 s o agente de acme/web "termina uma tarefa"
@@ -260,14 +278,16 @@ function demoData() {
     return {
       path: `${DEMO_ROOT}/${name}`, name, branch, cpu, rss, threads: 18 + i * 4, nproc: 3, claude: !!claude,
       cores_in_use: idle ? [] : [i * 2, i * 2 + 1], aff: [`${i * 2}-${i * 2 + 1}`],
+      wait: idle ? 0 : i === 4 ? 41 + 4 * Math.sin(t) : i === 0 ? 3 : 8 + 3 * Math.sin(t + i), waiting: idle ? 0 : i === 4 ? 1.6 : 0.3, ctl: demoCtlOf(`${DEMO_ROOT}/${name}`, 3),
       procs: cmds.map((cmd, k) => ({ pid: 4000 + i * 10 + k, cmd, pct: idle ? 0 : cpu / (k + 1.5), rss: rss / (k + 1.2), cpu: i * 2 + (k % 2) })),
     };
   }).sort((a, b) => b.cpu - a.cpu);
   return {
     t: now / 1000, root: DEMO_ROOT, cores: Array.from({ length: 16 }, (_, c) => Math.max(2, 45 + 40 * Math.sin(t / 3 + c))),
     mem: { total: 32e9, avail: 14e9 }, load: [3.2, 2.7, 2.1], groups,
-    cfg: { cpu_pct: 300, cpu_secs: 20, mem_bytes: 4e9, sys_pct: 90 },
-    alerts: [{ t: T0 + 3, msg: 'Memória alta: lab/ml-experiments usa 4.4 GB' }],
+    psi: { cpu: 18 + 6 * Math.sin(t / 2), mem: 1.4, memfull: 0 }, control: { enabled: true, supported: true, reason: '', mem_low: true, focus: DCTL.focus },
+    cfg: { cpu_pct: 300, cpu_secs: 20, mem_bytes: 4e9, sys_pct: 90, wait_pct: 30 },
+    alerts: [{ t: T0 + 8, msg: 'CPU disputada: lab/ml-experiments: 41% do tempo pronto para rodar ficou na fila (≈1.6 cores esperando)' }, { t: T0 + 3, msg: 'Memória alta: lab/ml-experiments usa 4.4 GB' }],
     events: [
       { t: cycle, path: `${DEMO_ROOT}/acme/web`, name: 'acme/web', session: 'a1b2c3d4', msg: 'Refatorei o formulário de checkout e adicionei testes. Tudo passando.' },
       { t: T0 - 240, path: `${DEMO_ROOT}/acme/api`, name: 'acme/api', session: 'e5f6a7b8', msg: 'Migração aplicada e endpoints de paginação documentados.' },
@@ -325,7 +345,7 @@ const nowSec = () => DEMO ? Date.now() / 1000 : (data ? data.t : Date.now() / 10
 const ago = t => { const s = Math.max(0, nowSec() - t); return s < 60 ? `há ${Math.round(s)} s` : s < 3600 ? `há ${Math.round(s / 60)} min` : `há ${Math.round(s / 3600)} h`; };
 if (QS.get('theme')) document.documentElement.dataset.theme = QS.get('theme');
 
-const HIST = 60, hist = {}, memHist = {}, kHist = { agents: [], cpu: [], mem: [], tasks: [] };
+const HIST = 60, hist = {}, memHist = {}, kHist = { agents: [], cpu: [], mem: [], tasks: [], psi: [] };
 let data = null, mode = ['sober', 'fun', 'term'].includes(QS.get('mode')) ? QS.get('mode') : load('wt-mode', 'sober');
 let filter = load('wt-filter', 'all'), query = '', tab = QS.get('tab') || 'agents', drawerPath = null, drawerOpener = null;
 let pins = new Set(); try { pins = new Set(JSON.parse(load('wt-pins', '[]'))); } catch {}
@@ -474,6 +494,17 @@ function setPin(btn, on, name) {
 }
 
 /* ---------- tabela (visão geral) ---------- */
+const starved = g => data && g.wait >= data.cfg.wait_pct && g.waiting >= 0.3;
+const queueLine = g => g.nproc && typeof g.wait === 'number' ? `<div class="qwait${starved(g) ? ' bad' : ''}" title="Parte do tempo pronto para rodar que este worktree passou esperando por um core">fila ${g.wait.toFixed(0)}%</div>` : '';
+const PRIO = { alta: ['↑ alta', 'up'], baixa: ['↓ baixa', 'down'], foco: ['◎ foco', 'up'], fundo: ['↓ fundo', 'down'] };
+function prioTag(g) {
+  const c = g.ctl; if (!c) return '';
+  const tags = [];
+  if (PRIO[c.cpu]) tags.push(`<span class="prio ${PRIO[c.cpu][1]}" title="Peso de CPU ${c.weight}">${PRIO[c.cpu][0]}</span>`);
+  if (c.high > 0) tags.push(`<span class="prio down" title="Limite suave de memória (memory.high)${c.throttled ? ` · freado ${c.throttled}×` : ''}">≤ ${Math.round(c.high / 2 ** 30)} GB</span>`);
+  if (c.low > 0) tags.push(`<span class="prio up" title="Memória protegida (memory.low)">⛨ ${Math.round(c.low / 2 ** 30)} GB</span>`);
+  return tags.join('');
+}
 function makeRow(r) {
   const el = document.createElement('div');
   el.className = 'row'; el.dataset.path = r.g.path; el.dataset.name = r.g.name;
@@ -486,12 +517,12 @@ function updateRow(el, r) {
   const { g } = r, color = r.st === 'hot' ? 'var(--hot)' : r.st === 'idle' ? 'var(--idle)' : 'var(--work)';
   el.classList.toggle('sel', g.path === drawerPath);
   setPin(el.querySelector('.pin'), r.pinned, g.name);
-  el.querySelector('.branch').textContent = g.branch || (g.idle ? 'sem processos' : '');
+  setHTML(el.querySelector('.branch'), `<span class="bn">${esc(g.branch || '')}</span>${prioTag(g)}`);
   setHTML(el.querySelector('.c-st'), badge(r.st));
   const shown = r.agents.slice(0, 4), more = r.agents.length - shown.length, subs = r.agents.filter(x => !x.main).length;
   setHTML(el.querySelector('.c-ag'), r.agents.length ? `<div class="stack">${shown.map(x => `<span class="av${x.main ? ' main' : ''}" title="${esc(x.title)}">${esc(x.letter)}</span>`).join('')}<small>${more > 0 ? `+${more}` : subs ? `+${subs} sub` : ''}</small></div>` : '<span class="faint">—</span>');
   setHTML(el.querySelector('.c-sk'), r.skill ? `<span class="skill mono" title="${esc(r.skill.name)}">${esc(r.skill.name)}</span>` : '<span class="faint">—</span>');
-  setHTML(el.querySelector('.c-cpu'), `<div class="meter"><div class="bar"><i style="width:${Math.min(100, g.cpu / 4)}%;background:${color}"></i></div><span>${g.cpu.toFixed(0)}%</span></div>`);
+  setHTML(el.querySelector('.c-cpu'), `<div class="meter"><div class="bar"><i style="width:${Math.min(100, g.cpu / 4)}%;background:${color}"></i></div><span>${g.cpu.toFixed(0)}%</span></div>${queueLine(g)}`);
   setHTML(el.querySelector('.c-mem'), `${(g.rss / 1e9).toFixed(1)} <span class="faint">GB</span>`);
   setHTML(el.querySelector('.c-sp'), spark(hist[g.path] || [], 88, 28, color, Math.max(100, ...(hist[g.path] || [0]))));
 }
@@ -552,6 +583,7 @@ function updateStation(el, r) {
 
 /* ---------- gaveta ---------- */
 const TABS = [['overview', 'Visão geral'], ['agents', 'Agentes'], ['activity', 'Atividade'], ['procs', 'Processos']];
+const tabsFor = () => data && data.control && data.control.enabled ? [...TABS, ['prio', 'Prioridade']] : TABS;
 function openDrawer(path, opener) {
   drawerPath = path; drawerOpener = opener;
   $('drawer').hidden = false; $('scrim').hidden = false; $('dclose').focus();
@@ -619,8 +651,29 @@ function activityTab(r) {
 function overviewTab(r) {
   const g = r.g, c = r.st === 'hot' ? 'var(--hot)' : 'var(--work)';
   const card = (l, v, extra = '') => `<div class="card"><div class="faint" style="font-size:12.5px">${l}</div><div style="font-size:22px;font-weight:600;letter-spacing:-.02em;margin-top:4px">${v}</div>${extra}</div>`;
-  return `<div class="grid2">${card('CPU', g.cpu.toFixed(0) + '%', spark(hist[g.path] || [], 240, 32, c, Math.max(100, ...(hist[g.path] || [0]))))}${card('Memória', fmtB(g.rss), spark(memHist[g.path] || [], 240, 32, 'var(--muted)', Math.max(1e8, ...(memHist[g.path] || [0]))))}${card('Processos', g.nproc)}${card('Threads', g.threads)}</div>
+  return `<div class="grid2">${card('CPU', g.cpu.toFixed(0) + '%', spark(hist[g.path] || [], 240, 32, c, Math.max(100, ...(hist[g.path] || [0]))))}${card('Memória', fmtB(g.rss), spark(memHist[g.path] || [], 240, 32, 'var(--muted)', Math.max(1e8, ...(memHist[g.path] || [0]))))}${card('Fila de CPU', typeof g.wait === 'number' ? g.wait.toFixed(0) + '%' : '—', `<div class="faint" style="font-size:12px;margin-top:4px">${typeof g.waiting === 'number' ? '≈' + g.waiting.toFixed(1) + ' cores esperando' : ''}</div>`)}${card('Processos', g.nproc + ' · ' + g.threads + ' threads')}</div>
     <div class="muted" style="font-size:13px">Afinidade: <span class="mono">${esc(g.aff.join(' | ') || '—')}</span> · cores ativos: <span class="mono">${g.cores_in_use.join(', ') || '—'}</span></div>`;
+}
+function prioTab(r) {
+  const g = r.g, c = g.ctl, ctl = data.control;
+  if (!ctl.supported) return `<div class="tnote">O controle de prioridade está ligado, mas este sistema não o permite: ${esc(ctl.reason)}</div>`;
+  if (!CTL.authed) return `<div class="tnote">${esc(CTL_NOTE)}</div>`;
+  if (!c) return '<div class="empty">Sem dados de controle para este worktree.</div>';
+  const seg = (attr, cur, opts) => `<div class="seg" role="group">${opts.map(([v, l]) => `<button type="button" ${attr}="${v}" aria-pressed="${String(cur) === String(v)}">${l}</button>`).join('')}</div>`;
+  const gb = [[0, 'Sem limite'], [1, '1 GB'], [2, '2 GB'], [4, '4 GB'], [8, '8 GB'], [16, '16 GB']];
+  const focused = ctl.focus === g.path, elsewhere = ctl.focus && !focused;
+  const fname = ctl.focus ? (data.groups.find(x => x.path === ctl.focus) || { name: ctl.focus.split('/').slice(-2).join('/') }).name : '';
+  return `<div class="ctl">
+    <section><h3>Prioridade de CPU</h3>${seg('data-cpu', c.want, [['baixa', 'Baixa'], ['normal', 'Normal'], ['alta', 'Alta']])}
+      <p>Só faz diferença quando os cores estão disputados: com a CPU sobrando, ninguém é freado. Alta recebe 4× a fatia do normal; baixa, ¼. ${elsewhere ? `<b>Foco ativo em ${esc(fname)}:</b> este worktree está em segundo plano até o foco ser desligado (o nível escolhido aqui volta depois).` : ''}</p></section>
+    <section><h3>Foco</h3><button type="button" class="chip${focused ? '' : ' primary'}" data-focus="${focused ? '' : g.path}">${focused ? 'Desligar o foco' : 'Dar foco a este worktree'}</button>
+      <p>Põe este worktree na frente de todos os outros worktrees de uma vez (peso 1000 contra 20). Um clique para ligar, um para desligar.</p></section>
+    <section><h3>Limite de memória <span class="faint" style="font-weight:400">(suave)</span></h3>${seg('data-high', Math.round(c.high / 2 ** 30), gb)}
+      <p>Ao passar do limite, o kernel freia o worktree e empurra memória dele para o swap: <b>nada é encerrado</b>. Vale para o que for alocado depois; o que os processos já usam não é contado. Terminais abertos pelo painel nascem dentro do limite e herdam tudo.</p></section>
+    ${ctl.mem_low ? `<section><h3>Proteger memória</h3>${seg('data-low', Math.round(c.low / 2 ** 30), gb.map(([v, l]) => [v, v ? l : 'Não']))}
+      <p>Quando o sistema aperta, o kernel tira memória dos outros antes de tocar nesta faixa.</p></section>` : ''}
+    <div class="stat"><span><b>${c.inside}</b> processo(s) sob controle</span><span>peso <b>${c.weight}</b></span>${c.mem ? `<span>memória do grupo <b>${fmtB(c.mem)}</b></span>` : ''}${c.throttled ? `<span>freado <b>${c.throttled}×</b></span>` : ''}${c.err ? `<span style="color:var(--hot)">${esc(c.err)}</span>` : ''}</div>
+  </div>`;
 }
 function procsTab(r) {
   const g = r.g;
@@ -634,8 +687,9 @@ function renderDrawer() {
   $('dtitle').textContent = g.name; $('dbranch').textContent = g.branch; $('dbranch').hidden = !g.branch;
   setHTML($('dstatus'), badge(r.st)); setPin($('dpin'), r.pinned, g.name);
   setHTML($('dsub'), `<span class="mono">${esc(g.path.replace(/^\/home\/[^/]+/, '~'))}</span>${r.a && r.a.session ? ` · sessão ${esc(String(r.a.session).slice(0, 8))}` : ''}`);
-  setHTML($('tabs'), TABS.map(([k, l]) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${tab === k}">${l}</button>`).join(''));
-  const body = { overview: overviewTab, agents: agentsTab, activity: activityTab, procs: procsTab }[tab](r);
+  setHTML($('tabs'), tabsFor().map(([k, l]) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${tab === k}">${l}</button>`).join(''));
+  if (!tabsFor().some(([k]) => k === tab)) tab = 'overview';
+  const body = { overview: overviewTab, agents: agentsTab, activity: activityTab, procs: procsTab, prio: prioTab }[tab](r);
   const box = $('dbody'), first = box._tab !== tab, atEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
   box._tab = tab;
   if (box._h !== body) { setHTML(box, body); if (tab === 'activity' && (atEnd || first)) box.scrollTop = box.scrollHeight; }
@@ -659,7 +713,7 @@ function render(d) {
   const cpuAvg = d.cores.reduce((a, b) => a + b, 0) / n, usedMem = d.mem.total - d.mem.avail, usedPct = 100 * usedMem / d.mem.total;
   const startDay = new Date(); startDay.setHours(0, 0, 0, 0);
   const today = d.events.filter(e => e.t >= startDay / 1000).length;
-  [['agents', total], ['cpu', cpuAvg], ['mem', usedMem / 1e9], ['tasks', today]].forEach(([k, v]) => { kHist[k] = kHist[k].concat(v).slice(-40); });
+  [['agents', total], ['cpu', cpuAvg], ['mem', usedMem / 1e9], ['tasks', today], ['psi', d.psi && d.psi.cpu != null ? d.psi.cpu : 0]].forEach(([k, v]) => { kHist[k] = kHist[k].concat(v).slice(-40); });
 
   if (mode === 'term') {
     renderTermHeader(d);
@@ -667,16 +721,18 @@ function render(d) {
     const waiting = all.filter(r => r.st === 'waiting').length;
     $('sub').textContent = `${all.filter(r => r.g.nproc).length} com atividade · ${total} agentes ativos · ${waiting} aguardando você`;
     const cnt = k => all.filter(r => k === 'all' ? true : k === 'pinned' ? r.pinned : k === 'working' ? ['working', 'hot'].includes(r.st) : r.st === k).length;
-    setHTML($('filters'), [['all', 'Todos'], ['working', 'Trabalhando'], ['waiting', 'Aguardando'], ['idle', 'Ociosos'], ['pinned', 'Fixados']].map(([k, l]) => `<button type="button" class="chip" data-filter="${k}" aria-pressed="${filter === k}">${l}<span>${cnt(k)}</span></button>`).join(''));
+    const fcs = d.control && d.control.focus ? (d.groups.find(x => x.path === d.control.focus) || { name: 'foco' }).name : '';
+    setHTML($('filters'), (fcs ? `<button type="button" class="chip" data-unfocus aria-label="Desligar o foco em ${esc(fcs)}" title="Desligar o foco">◎ Foco: ${esc(fcs)} ✕</button>` : '') + [['all', 'Todos'], ['working', 'Trabalhando'], ['waiting', 'Aguardando'], ['idle', 'Ociosos'], ['pinned', 'Fixados']].map(([k, l]) => `<button type="button" class="chip" data-filter="${k}" aria-pressed="${filter === k}">${l}<span>${cnt(k)}</span></button>`).join(''));
     const top = [...d.groups].sort((a, b) => b.cpu - a.cpu)[0];
     const kpi = (label, val, unit, note, vals, color, delta = '') => `<div class="card kpi"><div class="top"><span>${label}</span><span class="faint">${delta}</span></div><div class="mid"><div><b>${val}</b><span class="unit">${unit}</span></div>${spark(vals, 96, 30, color)}</div><div class="note">${note}</div></div>`;
     setHTML($('kpis'),
       kpi('Agentes ativos', total, '', `${mains} principais · ${total - mains} subagentes`, kHist.agents, 'var(--work)') +
       kpi('CPU', cpuAvg.toFixed(0), `% de ${n} cores`, top ? `maior uso: ${esc(top.name)}` : '—', kHist.cpu, 'var(--muted)') +
       kpi('Memória', (usedMem / 1e9).toFixed(1), `de ${(d.mem.total / 1e9).toFixed(0)} GB`, `${fmtB(d.mem.avail)} livres`, kHist.mem, 'var(--muted)', usedPct.toFixed(0) + '%') +
+      kpi('Pressão de CPU', d.psi && d.psi.cpu != null ? d.psi.cpu.toFixed(0) : '—', '%', d.psi && d.psi.cpu != null ? `tempo com tarefas na fila · memória ${d.psi.mem.toFixed(0)}%` : 'sem PSI neste kernel', kHist.psi, d.psi && d.psi.cpu >= 25 ? 'var(--wait)' : 'var(--muted)') +
       kpi('Tarefas hoje', today, '', d.events[0] ? `última ${ago(d.events[0].t)}` : 'nenhuma ainda', kHist.tasks, 'var(--work)'));
     setHTML($('events'), d.events.length ? d.events.slice(0, 5).map(e => `<div class="li"><div class="h"><b style="font-weight:500">${esc(e.name)}</b><span class="faint">${ago(e.t)}</span></div><p>${esc(e.msg.slice(0, 160) || 'Tarefa concluída')}</p></div>`).join('') : '<div class="li faint">aguardando a conclusão de uma tarefa…</div>');
-    $('thr').textContent = `· CPU ≥ ${d.cfg.cpu_pct}% · mem ≥ ${(d.cfg.mem_bytes / 1e9).toFixed(1)} GB`;
+    $('thr').textContent = `· CPU ≥ ${d.cfg.cpu_pct}% · mem ≥ ${(d.cfg.mem_bytes / 1e9).toFixed(1)} GB · fila ≥ ${d.cfg.wait_pct}%`;
     setHTML($('alerts'), d.alerts.length ? d.alerts.map(a => `<div class="li" style="display:flex;gap:10px"><span class="dot" style="background:var(--hot);margin-top:7px"></span><div><div style="font-weight:500">${esc(a.msg)}</div><div class="faint">${clock(a.t)}</div></div></div>`).join('') : '<div class="li faint">nenhum alerta disparado</div>');
     setHTML($('cores'), d.cores.map((u, i) => `<i title="core ${i}: ${u.toFixed(0)}%" style="background:color-mix(in srgb,${u > 85 ? 'var(--hot)' : u > 60 ? 'var(--wait)' : 'var(--work)'} ${Math.max(12, Math.round(u))}%,var(--border))"></i>`).join(''));
     sync($('rows'), shown, makeRow, updateRow);
@@ -690,6 +746,28 @@ function render(d) {
   }
   renderDrawer();
 }
+
+/* ---------- controle de prioridade (opt-in: wt-monitor --control) ---------- */
+const CTL = { authed: false };
+const CTL_NOTE = 'O controle está habilitado no servidor, mas este navegador ainda não tem o token. Abra o painel pelo link gerado por “make open-terminals” (o mesmo token dos terminais).';
+const ctlHeaders = () => ({ 'X-WT': '1', 'X-WT-Token': load('wt-token', ''), 'Content-Type': 'text/plain' });
+async function ctlProbe() {
+  if (DEMO) { CTL.authed = true; return; }
+  try { const r = await fetch('/api/control', { headers: ctlHeaders() }); CTL.authed = r.ok && !!(await r.json()).auth; } catch { /* tenta de novo no próximo ciclo */ }
+}
+async function ctlPost(route, body) {
+  if (DEMO) { demoCtlPost(route, body); return tick(); }
+  const r = await fetch(route, { method: 'POST', headers: ctlHeaders(), body });
+  if (r.status === 403) { CTL.authed = false; if (data) renderDrawer(); return; }
+  setTimeout(tick, 1100); // o sampler aplica no próximo ciclo
+}
+$('dbody').addEventListener('click', e => {
+  const b = e.target.closest('[data-cpu],[data-high],[data-low],[data-focus]'); if (!b || !drawerPath) return;
+  const path = `path=${encodeURIComponent(drawerPath)}`;
+  if ('focus' in b.dataset) return ctlPost('/api/control/focus', `path=${encodeURIComponent(b.dataset.focus)}`);
+  for (const k of ['cpu', 'high', 'low']) if (k in b.dataset) return ctlPost('/api/control', `${path}&${k}=${b.dataset[k]}`);
+});
+addEventListener('hashchange', () => { if (!DEMO) setTimeout(ctlProbe, 50); });
 
 /* ---------- terminais (opt-in: wt-monitor --terminals) ---------- */
 const TERM = { enabled: false, authed: false, token: '', metas: [], panes: new Map(), active: null, layout: Number(QS.get('layout')) || Number(load('wt-tlayout', '1')) || 1, demoId: 0 };
@@ -870,7 +948,7 @@ function setMode(m) {
   if (data) render(data);
 }
 document.querySelectorAll('.seg [data-mode]').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
-$('filters').addEventListener('click', e => { const b = e.target.closest('[data-filter]'); if (b) { filter = b.dataset.filter; store('wt-filter', filter); render(data); } });
+$('filters').addEventListener('click', e => { if (e.target.closest('[data-unfocus]')) return ctlPost('/api/control/focus', 'path='); const b = e.target.closest('[data-filter]'); if (b) { filter = b.dataset.filter; store('wt-filter', filter); render(data); } });
 $('q').addEventListener('input', e => { query = e.target.value.trim().toLowerCase(); if (data) render(data); });
 function togglePin(path) { pins.has(path) ? pins.delete(path) : pins.add(path); store('wt-pins', JSON.stringify([...pins])); render(data); }
 for (const id of ['rows', 'stations']) $(id).addEventListener('click', e => {
@@ -908,6 +986,7 @@ async function tick() {
 }
 (async () => {
   await termInit();
+  await ctlProbe();
   if (mode === 'term' && !TERM.enabled) mode = 'sober';
   updateTermAvailability();
   setMode(mode);

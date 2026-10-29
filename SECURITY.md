@@ -22,4 +22,11 @@ wt-monitor is a local tool for a single user's machine.
 - Only terminals **started by the panel** are managed; it never attaches to other terminals. At most 16 at a time; each is killed (SIGHUP, then SIGKILL) when closed.
 - The token is compared in constant time. Anyone holding it can run commands as your user: treat it like an SSH key and rotate it by deleting the file and restarting.
 
+**Priority control (opt-in with `--control`):** the dashboard can move the processes of a worktree between cgroups and set `cpu.weight`, `memory.high` and `memory.low` on them. It cannot run commands, and it can only touch what your user can already touch, but it can slow your own processes down, so it is guarded like the terminals:
+- It is **off by default**; every `/api/control*` route answers 404 unless started with `--control` (or `WT_CONTROL=1`).
+- Changes need the **same token** (never returned by an API) and the `X-WT: 1` header; `GET /api/control` only tells you whether you are authorised. The worktree must be valid and inside the root; levels and limits are a closed set (`baixa|normal|alta`, whole GiB from 0 to 1024).
+- It never sets `memory.max` and never kills a process: the worst a limit does is throttle a worktree. The panel never moves itself.
+- It only moves processes whose working directory is inside a worktree under the root, and only into cgroups it created itself (`wtm-*`) in the slice systemd delegated to your user. Anything the kernel does not let your user move is skipped.
+- A stolen token therefore lets an attacker deprioritise or throttle your worktrees, not read data or run code; for code execution see the terminals above, which use the same token.
+
 **Out of scope:** attackers who already run code as your user (they can do anything), and exposing the port beyond loopback (don't: there is no TLS and no user authentication).

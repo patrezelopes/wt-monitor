@@ -168,19 +168,13 @@ fn ct_eq(a: &str, b: &str) -> bool {
     a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
+/// O pedido traz o cabeçalho customizado (que força preflight CORS, nunca aprovado) e o token certo.
+pub fn authed(token: &str, hdr: &dyn Fn(&str) -> Option<String>) -> bool {
+    hdr("x-wt").as_deref() == Some("1") && hdr("x-wt-token").is_some_and(|t| ct_eq(&t, token))
+}
+
 impl Terms {
-    pub fn new(enabled: bool) -> Self {
-        let token = if enabled {
-            load_or_create_token().unwrap_or_else(|e| {
-                eprintln!(
-                    "não foi possível ler/criar o token dos terminais ({}): {e}",
-                    token_path().display()
-                );
-                std::process::exit(1);
-            })
-        } else {
-            String::new()
-        };
+    pub fn new(enabled: bool, token: String) -> Self {
         Terms {
             enabled,
             token,
@@ -208,14 +202,16 @@ impl Terms {
         t.inspect(|t| t.kill()).is_some()
     }
 
+    /// `on_spawn` recebe o pid logo após o fork, antes de qualquer comando ser digitado.
     fn create(
         &self,
         wt: &Path,
         name: &str,
         kind: &'static str,
-        cols: u16,
-        rows: u16,
+        size: (u16, u16),
+        on_spawn: &dyn Fn(u32),
     ) -> Result<Arc<Term>, String> {
+        let (cols, rows) = size;
         let mut items = self.items.lock().unwrap();
         self.sweep(&mut items);
         if items.len() >= MAX_TERMS {
@@ -238,6 +234,7 @@ impl Terms {
         ];
         let mut p = pty::spawn(&shell, &["-l"], wt, &env, cols, rows)
             .map_err(|e| format!("não foi possível iniciar o terminal: {e}"))?;
+        on_spawn(p.child.id());
         if kind == "claude" {
             let _ = p.master.write_all(b"claude\n"); // fica no shell quando o claude termina
         }
@@ -328,9 +325,7 @@ pub fn route(
             "terminals are disabled (start with --terminals)",
         );
     }
-    // O cabeçalho customizado força preflight CORS (que o servidor nunca aprova); o token vem do arquivo do usuário.
-    let authed = hdr("x-wt").as_deref() == Some("1")
-        && hdr("x-wt-token").is_some_and(|t| ct_eq(&t, &terms.token));
+    let authed = authed(&terms.token, hdr);
     if method == "GET" && route == "/api/terminals" {
         // Sem token, só se revela que os terminais existem: o token nunca é devolvido por esta API.
         let json = if authed {
@@ -383,7 +378,10 @@ pub fn route(
                 .unwrap_or(&wt)
                 .to_string_lossy()
                 .into_owned();
-            match terms.create(&wt, &name, kind, num("cols", 80, 500), num("rows", 24, 300)) {
+            let size = (num("cols", 80, 500), num("rows", 24, 300));
+            match terms.create(&wt, &name, kind, size, &|pid| {
+                ctx.control.on_spawn(&wt, pid)
+            }) {
                 Ok(t) => respond(
                     &mut s,
                     "201 Created",

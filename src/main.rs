@@ -11,6 +11,7 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 mod pty;
+mod sched;
 mod terms;
 mod ws;
 
@@ -30,6 +31,7 @@ struct Proc {
     threads: u32,
     rss: u64,
     aff: String,
+    sched: (u64, u64),
 }
 
 fn esc(s: &str) -> String {
@@ -111,6 +113,7 @@ fn proc_info(pid: u32, root: &Path, cache: &mut HashMap<PathBuf, Option<PathBuf>
         threads: n(17) as u32,
         rss,
         aff,
+        sched: sched::proc_sched(pid).unwrap_or_default(),
     })
 }
 
@@ -165,6 +168,8 @@ struct Group {
     nproc: usize,
     cores: BTreeSet<u32>,
     aff: BTreeSet<String>,
+    d_run: u64,
+    d_wait: u64,
     procs: Vec<(Proc, f64)>,
 }
 
@@ -202,6 +207,8 @@ struct Cfg {
     cpu_secs: u64,
     mem_bytes: u64,
     sys_pct: f64,
+    wait_pct: f64,
+    wait_secs: u64,
 }
 
 impl Cfg {
@@ -217,6 +224,8 @@ impl Cfg {
             cpu_secs: f("WT_CPU_SECS", 20.0) as u64,
             mem_bytes: (f("WT_MEM_GB", 4.0) * 1e9) as u64,
             sys_pct: f("WT_SYS_MEM_PCT", 90.0),
+            wait_pct: f("WT_WAIT_PCT", 30.0),
+            wait_secs: f("WT_WAIT_SECS", 15.0) as u64,
         }
     }
 }
@@ -309,12 +318,18 @@ fn notify(title: &str, body: &str, urgent: bool) {
     });
 }
 
-fn sampler(root: PathBuf, out: Arc<Mutex<String>>, events: Arc<Mutex<VecDeque<Event>>>) {
+fn sampler(
+    root: PathBuf,
+    out: Arc<Mutex<String>>,
+    events: Arc<Mutex<VecDeque<Event>>>,
+    control: Arc<sched::Control>,
+) {
     let cfg = Cfg::from_env();
     let mut alerts = Alerts::default();
     let mut cache = HashMap::new();
     let mut prev_t: Option<Instant> = None;
     let mut prev_pids: HashMap<u32, u64> = HashMap::new();
+    let mut prev_sched: HashMap<u32, (u64, u64)> = HashMap::new();
     let mut prev_cpus = BTreeMap::new();
     loop {
         let now = Instant::now();
@@ -345,6 +360,7 @@ fn sampler(root: PathBuf, out: Arc<Mutex<String>>, events: Arc<Mutex<VecDeque<Ev
             .collect();
 
         let next_pids: HashMap<u32, u64> = procs.iter().map(|p| (p.pid, p.ticks)).collect();
+        let next_sched: HashMap<u32, (u64, u64)> = procs.iter().map(|p| (p.pid, p.sched)).collect();
         let mut groups: BTreeMap<PathBuf, Group> = BTreeMap::new();
         for p in procs {
             let pct = match (prev_pids.get(&p.pid), dt) {
@@ -362,8 +378,14 @@ fn sampler(root: PathBuf, out: Arc<Mutex<String>>, events: Arc<Mutex<VecDeque<Ev
                 nproc: 0,
                 cores: BTreeSet::new(),
                 aff: BTreeSet::new(),
+                d_run: 0,
+                d_wait: 0,
                 procs: vec![],
             });
+            if let Some(&(pr, pw)) = prev_sched.get(&p.pid) {
+                g.d_run += p.sched.0.saturating_sub(pr);
+                g.d_wait += p.sched.1.saturating_sub(pw);
+            }
             g.cpu += pct;
             g.rss += p.rss;
             g.threads += p.threads;
@@ -381,6 +403,17 @@ fn sampler(root: PathBuf, out: Arc<Mutex<String>>, events: Arc<Mutex<VecDeque<Ev
         let mut groups: Vec<(PathBuf, Group)> = groups.into_iter().collect();
         groups.sort_by(|a, b| b.1.cpu.partial_cmp(&a.1.cpu).unwrap());
 
+        let dt_s = dt.unwrap_or(1.0);
+        let waits: Vec<sched::Wait> = groups
+            .iter()
+            .map(|(_, g)| sched::wait_stats(g.d_run, g.d_wait, dt_s))
+            .collect();
+        let pairs: Vec<(PathBuf, Vec<u32>)> = groups
+            .iter()
+            .map(|(p, g)| (p.clone(), g.procs.iter().map(|(p, _)| p.pid).collect()))
+            .collect();
+        control.enforce(&pairs);
+
         let (mt, ma) = mem_info();
         let load = fs::read_to_string("/proc/loadavg").unwrap_or_default();
         let load: Vec<&str> = load.split_whitespace().take(3).collect();
@@ -390,7 +423,7 @@ fn sampler(root: PathBuf, out: Arc<Mutex<String>>, events: Arc<Mutex<VecDeque<Ev
             .unwrap_or(0.0);
 
         let hold = Duration::from_secs(cfg.cpu_secs);
-        for (path, g) in &groups {
+        for ((path, g), w) in groups.iter().zip(&waits) {
             let name = path
                 .strip_prefix(&root)
                 .unwrap_or(path)
@@ -410,6 +443,20 @@ fn sampler(root: PathBuf, out: Arc<Mutex<String>>, events: Arc<Mutex<VecDeque<Ev
                         g.cpu,
                         g.cpu / 100.0,
                         cfg.cpu_secs
+                    ),
+                },
+            );
+            alerts.check(
+                ts,
+                Rule {
+                    key: format!("wait:{key}"),
+                    over: w.pct >= cfg.wait_pct && w.ready >= 0.3,
+                    hold: Duration::from_secs(cfg.wait_secs),
+                    urgent: false,
+                    title: "CPU disputada",
+                    body: format!(
+                        "{name}: {:.0}% do tempo pronto para rodar ficou na fila (≈{:.1} cores esperando)",
+                        w.pct, w.waiting
                     ),
                 },
             );
@@ -452,8 +499,14 @@ fn sampler(root: PathBuf, out: Arc<Mutex<String>>, events: Arc<Mutex<VecDeque<Ev
         let _ = write!(j, "\"load\":[{}],", load.join(","));
         let _ = write!(
             j,
-            "\"cfg\":{{\"cpu_pct\":{},\"cpu_secs\":{},\"mem_bytes\":{},\"sys_pct\":{}}},",
-            cfg.cpu_pct, cfg.cpu_secs, cfg.mem_bytes, cfg.sys_pct
+            "\"psi\":{},\"control\":{},",
+            sched::psi_json(),
+            control.head_json()
+        );
+        let _ = write!(
+            j,
+            "\"cfg\":{{\"cpu_pct\":{},\"cpu_secs\":{},\"mem_bytes\":{},\"sys_pct\":{},\"wait_pct\":{}}},",
+            cfg.cpu_pct, cfg.cpu_secs, cfg.mem_bytes, cfg.sys_pct, cfg.wait_pct
         );
         let _ = write!(
             j,
@@ -490,7 +543,7 @@ fn sampler(root: PathBuf, out: Arc<Mutex<String>>, events: Arc<Mutex<VecDeque<Ev
                 .collect::<Vec<_>>()
                 .join(",")
         );
-        for (gi, (path, g)) in groups.iter_mut().enumerate() {
+        for (gi, ((path, g), w)) in groups.iter_mut().zip(&waits).enumerate() {
             g.procs.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
             let name = path
                 .strip_prefix(&root)
@@ -502,8 +555,9 @@ fn sampler(root: PathBuf, out: Arc<Mutex<String>>, events: Arc<Mutex<VecDeque<Ev
             }
             let _ = write!(
                 j,
-                "{{\"path\":\"{}\",\"name\":\"{}\",\"branch\":\"{}\",\"cpu\":{:.1},\"rss\":{},\"threads\":{},\"nproc\":{},\"claude\":{},\"cores_in_use\":[{}],\"aff\":[{}],\"procs\":[",
+                "{{\"path\":\"{}\",\"name\":\"{}\",\"branch\":\"{}\",\"cpu\":{:.1},\"rss\":{},\"threads\":{},\"nproc\":{},\"claude\":{},\"wait\":{:.1},\"waiting\":{:.2},\"ctl\":{},\"cores_in_use\":[{}],\"aff\":[{}],\"procs\":[",
                 esc(&path.to_string_lossy()), esc(&name), esc(&g.branch), g.cpu, g.rss, g.threads, g.nproc, g.claude,
+                w.pct, w.waiting, control.group_json(path),
                 g.cores.iter().map(|c| c.to_string()).collect::<Vec<_>>().join(","),
                 g.aff.iter().map(|a| format!("\"{}\"", esc(a))).collect::<Vec<_>>().join(","),
             );
@@ -528,6 +582,7 @@ fn sampler(root: PathBuf, out: Arc<Mutex<String>>, events: Arc<Mutex<VecDeque<Ev
 
         prev_t = Some(now);
         prev_pids = next_pids;
+        prev_sched = next_sched;
         prev_cpus = cpus;
         thread::sleep(Duration::from_secs(1));
     }
@@ -547,6 +602,8 @@ struct Ctx {
     root: PathBuf,
     port: u16,
     terms: terms::Terms,
+    control: Arc<sched::Control>,
+    token: String,
 }
 
 impl Ctx {
@@ -877,6 +934,9 @@ fn serve(mut s: TcpStream, ctx: &Ctx) {
         handle_event(ctx, &body);
         return respond(&mut s, "204 No Content", "text/plain", "");
     }
+    if route.starts_with("/api/control") {
+        return sched::route(s, ctx, method, route, &hdr, &body);
+    }
     if route.starts_with("/api/terminals") || route.starts_with("/ws/term/") {
         return terms::route(s, ctx, method, route, &hdr, &body);
     }
@@ -920,7 +980,10 @@ fn main() {
     // Terminais são opt-in: só ligam com --terminals (ou WT_TERMINALS=1, para a unit do systemd).
     let terminals = args.iter().any(|a| a == "--terminals")
         || std::env::var("WT_TERMINALS").is_ok_and(|v| v == "1");
-    args.retain(|a| a != "--terminals");
+    // Controle de prioridade (cgroups) também é opt-in: --control ou WT_CONTROL=1.
+    let control = args.iter().any(|a| a == "--control")
+        || std::env::var("WT_CONTROL").is_ok_and(|v| v == "1");
+    args.retain(|a| a != "--terminals" && a != "--control");
     let mut args = args.into_iter();
     let root = args
         .next()
@@ -938,16 +1001,35 @@ fn main() {
     });
     let port: u16 = args.next().and_then(|p| p.parse().ok()).unwrap_or(8765);
 
+    // O mesmo segredo autoriza terminais e mudanças de prioridade.
+    let token = if terminals || control {
+        terms::load_or_create_token().unwrap_or_else(|e| {
+            eprintln!("não foi possível ler/criar o token (~/.config/wt-monitor/token): {e}");
+            std::process::exit(1);
+        })
+    } else {
+        String::new()
+    };
+    let control = Arc::new(sched::Control::new(control));
     let ctx = Arc::new(Ctx {
         data: Arc::new(Mutex::new(String::from("{}"))),
         events: Arc::new(Mutex::new(VecDeque::new())),
         root: root.clone(),
         port,
-        terms: terms::Terms::new(terminals),
+        terms: terms::Terms::new(terminals, token.clone()),
+        control: control.clone(),
+        token,
     });
     {
         let c = ctx.clone();
-        thread::spawn(move || sampler(c.root.clone(), c.data.clone(), c.events.clone()));
+        thread::spawn(move || {
+            sampler(
+                c.root.clone(),
+                c.data.clone(),
+                c.events.clone(),
+                c.control.clone(),
+            )
+        });
     }
     let listener = TcpListener::bind(("127.0.0.1", port)).unwrap_or_else(|e| {
         eprintln!("não foi possível abrir a porta {port}: {e}");
@@ -960,6 +1042,16 @@ fn main() {
     if terminals {
         println!("Terminais HABILITADOS: o painel pode abrir shells nesta máquina (só 127.0.0.1, exige token).");
         println!("Abra uma vez: http://127.0.0.1:{port}/#token=$(wt-monitor --print-token)   (ou: make open-terminals)");
+    }
+    if ctx.control.enabled {
+        if ctx.control.supported() {
+            println!("Controle de prioridade HABILITADO: o painel pode mover processos de worktrees entre cgroups (cpu.weight, memory.high/low).");
+        } else {
+            println!(
+                "Controle de prioridade pedido, mas indisponível: {}",
+                ctx.control.head_json()
+            );
+        }
     }
     for s in listener.incoming().flatten() {
         let c = ctx.clone();
