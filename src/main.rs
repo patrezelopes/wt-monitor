@@ -10,8 +10,16 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+mod pty;
+mod terms;
+mod ws;
+
 const TICK: f64 = 100.0; // CLK_TCK no Linux
 const INDEX: &str = include_str!("../index.html");
+// Emulador de terminal do navegador (xterm.js, MIT), embutido no binário: nenhuma requisição de rede.
+const XTERM_JS: &str = include_str!("../vendor/xterm/xterm.js");
+const XTERM_CSS: &str = include_str!("../vendor/xterm/xterm.css");
+const FIT_JS: &str = include_str!("../vendor/xterm/addon-fit.js");
 
 struct Proc {
     pid: u32,
@@ -538,6 +546,19 @@ struct Ctx {
     events: Arc<Mutex<VecDeque<Event>>>,
     root: PathBuf,
     port: u16,
+    terms: terms::Terms,
+}
+
+impl Ctx {
+    /// Caminho de um worktree válido: absoluto, sem "..", com ".git" e (já resolvido) dentro da raiz.
+    fn worktree(&self, raw: &str) -> Option<PathBuf> {
+        let p = PathBuf::from(raw);
+        if !p.is_absolute() || p.components().any(|c| matches!(c, Component::ParentDir)) {
+            return None;
+        }
+        let wt = fs::canonicalize(&p).ok()?;
+        (wt.starts_with(&self.root) && wt.join(".git").exists()).then_some(wt)
+    }
 }
 
 fn find(h: &[u8], n: &[u8]) -> Option<usize> {
@@ -758,14 +779,9 @@ fn subagents_json(main: &Path) -> String {
 fn preview(ctx: &Ctx, query: &str) -> String {
     let none = || "{\"found\":false}".to_string();
     let raw = qparam(query, "path").map(pct_decode).unwrap_or_default();
-    let wt = PathBuf::from(&raw);
-    let ok = wt.is_absolute()
-        && wt.starts_with(&ctx.root)
-        && !wt.components().any(|c| matches!(c, Component::ParentDir))
-        && wt.join(".git").exists();
-    if !ok {
+    let Some(wt) = ctx.worktree(&raw) else {
         return none();
-    }
+    };
     let Some((file, mtime)) = latest_transcript(&wt) else {
         return none();
     };
@@ -840,24 +856,41 @@ fn serve(mut s: TcpStream, ctx: &Ctx) {
     }
     let (route, query) = path.split_once('?').unwrap_or((path, ""));
 
+    let len: usize = hdr("content-length")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0)
+        .min(65536);
+    let mut body = buf[head_end + 4..].to_vec();
+    while body.len() < len {
+        match s.read(&mut tmp) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => body.extend_from_slice(&tmp[..n]),
+        }
+    }
+    let body = String::from_utf8_lossy(&body[..body.len().min(len)]).into_owned();
+
     if method == "POST" && path == "/event" {
         // Cabeçalho customizado força preflight CORS: páginas web de terceiros não conseguem postar aqui.
         if hdr("x-wt").as_deref() != Some("1") {
             return respond(&mut s, "403 Forbidden", "text/plain", "forbidden");
         }
-        let len: usize = hdr("content-length")
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(0)
-            .min(65536);
-        let mut body = buf[head_end + 4..].to_vec();
-        while body.len() < len {
-            match s.read(&mut tmp) {
-                Ok(0) | Err(_) => break,
-                Ok(n) => body.extend_from_slice(&tmp[..n]),
-            }
-        }
-        handle_event(ctx, &String::from_utf8_lossy(&body[..body.len().min(len)]));
+        handle_event(ctx, &body);
         return respond(&mut s, "204 No Content", "text/plain", "");
+    }
+    if route.starts_with("/api/terminals") || route.starts_with("/ws/term/") {
+        return terms::route(s, ctx, method, route, &hdr, &body);
+    }
+    match route {
+        "/vendor/xterm.js" => {
+            return respond(&mut s, "200 OK", "text/javascript; charset=utf-8", XTERM_JS)
+        }
+        "/vendor/addon-fit.js" => {
+            return respond(&mut s, "200 OK", "text/javascript; charset=utf-8", FIT_JS)
+        }
+        "/vendor/xterm.css" => {
+            return respond(&mut s, "200 OK", "text/css; charset=utf-8", XTERM_CSS)
+        }
+        _ => {}
     }
 
     if route == "/api/preview" {
@@ -872,7 +905,23 @@ fn serve(mut s: TcpStream, ctx: &Ctx) {
 }
 
 fn main() {
-    let mut args = std::env::args().skip(1);
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    // `wt-monitor --print-token`: imprime o segredo dos terminais (criando-o se preciso) para montar o link de acesso.
+    if args.iter().any(|a| a == "--print-token") {
+        match terms::load_or_create_token() {
+            Ok(t) => println!("{t}"),
+            Err(e) => {
+                eprintln!("erro: {e}");
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
+    // Terminais são opt-in: só ligam com --terminals (ou WT_TERMINALS=1, para a unit do systemd).
+    let terminals = args.iter().any(|a| a == "--terminals")
+        || std::env::var("WT_TERMINALS").is_ok_and(|v| v == "1");
+    args.retain(|a| a != "--terminals");
+    let mut args = args.into_iter();
     let root = args
         .next()
         .map(|r| {
@@ -894,6 +943,7 @@ fn main() {
         events: Arc::new(Mutex::new(VecDeque::new())),
         root: root.clone(),
         port,
+        terms: terms::Terms::new(terminals),
     });
     {
         let c = ctx.clone();
@@ -907,6 +957,10 @@ fn main() {
         "Painel em http://127.0.0.1:{port}  (raiz: {})",
         root.display()
     );
+    if terminals {
+        println!("Terminais HABILITADOS: o painel pode abrir shells nesta máquina (só 127.0.0.1, exige token).");
+        println!("Abra uma vez: http://127.0.0.1:{port}/#token=$(wt-monitor --print-token)   (ou: make open-terminals)");
+    }
     for s in listener.incoming().flatten() {
         let c = ctx.clone();
         thread::spawn(move || serve(s, &c));

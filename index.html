@@ -134,12 +134,35 @@
   .sub { position:absolute; left:400px; display:flex; align-items:center; gap:10px; font-size:12.5px } .sub b { font-weight:500; display:block } .sub small { font-size:11.5px }
   .stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:20px; margin-top:14px }
   .stats .h { display:flex; justify-content:space-between; font-size:12px; color:var(--faint) } .stats .h span:last-child { color:var(--text) } .stats .bar { margin-top:6px; height:4px; border-radius:2px; background:var(--border) } .stats .bar i { display:block; height:100%; border-radius:2px }
+  /* terminais */
+  .tctl { display:flex; gap:8px; align-items:center; flex-wrap:wrap }
+  .tctl select { height:30px; padding:0 10px; border:1px solid var(--border2); border-radius:8px; background:var(--surface); color:var(--text); font:inherit; font-size:13px; max-width:280px }
+  .chip:disabled { opacity:.45; cursor:not-allowed }
+  .tctl .chip.primary { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600 }
+  .ttabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px }
+  .ttab { display:inline-flex; align-items:center; border:1px solid var(--border); border-radius:8px; background:var(--surface) }
+  .ttab.on { border-color:var(--accent); background:var(--elev) }
+  .ttab button { all:unset; cursor:pointer; padding:5px 10px; font-size:12.5px; display:flex; align-items:center; gap:7px }
+  .ttab button.x { padding:5px 8px; color:var(--faint) } .ttab button.x:hover { color:var(--hot) }
+  .ttab button:focus-visible { outline:2px solid var(--accent); border-radius:6px }
+  .ttab .dot.off { background:var(--idle) }
+  .tgrid { display:grid; gap:12px; grid-template-columns:1fr }
+  .tgrid[data-layout="2"], .tgrid[data-layout="4"] { grid-template-columns:repeat(2,minmax(0,1fr)) }
+  .tpane { display:flex; flex-direction:column; height:calc(100vh - 250px); min-height:360px; overflow:hidden; padding:0 }
+  .tgrid[data-layout="4"] .tpane { height:calc((100vh - 270px) / 2); min-height:260px }
+  .tpane.on { border-color:var(--accent) }
+  .thead2 { display:flex; align-items:center; gap:10px; padding:8px 12px; border-bottom:1px solid var(--border); font-size:12.5px }
+  .thead2 .nm { font-weight:600 } .thead2 .st { color:var(--faint); margin-left:auto }
+  .tbody { flex:1; min-height:0; padding:8px 4px 4px 10px; background:var(--bg) }
+  .tbody .xterm { height:100% } .tbody .xterm-viewport { background:transparent !important }
+  .tnote { padding:10px 14px; border:1px solid var(--border); border-left:3px solid var(--wait); border-radius:8px; background:var(--surface); color:var(--muted); font-size:12.5px; margin-bottom:12px }
   @keyframes travel { from { offset-distance:0% } to { offset-distance:100% } }
   @keyframes bob { 50% { transform:translateY(-3px) } } @keyframes shake { 25% { transform:translateX(-1.5px) } 75% { transform:translateX(1.5px) } }
   @keyframes jump { 0%,100% { transform:translateY(0) } 40% { transform:translateY(-12px) } } @keyframes eq { 50% { transform:scaleY(.35) } }
   @media (prefers-reduced-motion: reduce) { .pkt, .char, .typing i { animation:none !important } .pkt { offset-distance:50% } }
   @media (max-width: 900px) { .nav { flex-wrap:wrap; height:auto; padding:12px 16px; gap:12px } main { padding:20px 16px } .search { order:5; flex-basis:100% } .stations { grid-template-columns:1fr } }
 </style>
+<link rel="stylesheet" href="/vendor/xterm.css">
 </head>
 <body>
 <header class="nav">
@@ -154,6 +177,7 @@
   <div class="seg" role="group" aria-label="Visual">
     <button type="button" data-mode="sober" aria-pressed="true">Visão geral</button>
     <button type="button" data-mode="fun" aria-pressed="false">Arena</button>
+    <button type="button" data-mode="term" aria-pressed="false" id="segterm" hidden>Terminais</button>
   </div>
   <span class="live"><span class="dot"></span><span id="live">conectando…</span></span>
 </header>
@@ -179,6 +203,24 @@
     </div>
   </div>
 
+  <div id="terms" hidden>
+    <div class="titlebar">
+      <div><h1>Terminais</h1><p id="tsub"></p></div>
+      <div class="tctl">
+        <select id="twt" aria-label="Worktree do novo terminal"></select>
+        <button type="button" class="chip primary" id="tnew-shell">Novo terminal</button>
+        <button type="button" class="chip" id="tnew-claude" title="Abre um terminal e executa o claude">Novo Claude</button>
+        <div class="seg" role="group" aria-label="Painéis lado a lado" id="tlayout">
+          <button type="button" data-layout="1" aria-pressed="true">1</button><button type="button" data-layout="2" aria-pressed="false">2</button><button type="button" data-layout="4" aria-pressed="false">4</button>
+        </div>
+      </div>
+    </div>
+    <div class="tnote" id="tnote" hidden></div>
+    <div class="ttabs" id="ttabs" role="tablist" aria-label="Terminais"></div>
+    <div class="tgrid" id="tgrid" data-layout="1"></div>
+    <div class="empty" id="tempty">Nenhum terminal aberto. Escolha um worktree e clique em “Novo terminal”.</div>
+  </div>
+
   <div id="arena" hidden>
     <div class="titlebar"><div><h1>Arena</h1></div><div class="chips" id="chips"></div></div>
     <div class="stations" id="stations"></div>
@@ -190,6 +232,8 @@
 <aside class="drawer" id="drawer" role="dialog" aria-labelledby="dtitle" hidden>
   <div class="dh">
     <div class="t"><h2 id="dtitle"></h2><span class="tag mono" id="dbranch"></span><span id="dstatus"></span><span style="flex:1"></span>
+      <button type="button" class="chip" id="dterm" hidden>Terminal</button>
+      <button type="button" class="chip" id="dclaude" hidden>Claude</button>
       <button type="button" class="iconbtn" id="dpin"></button>
       <button type="button" class="iconbtn" id="dclose" aria-label="Fechar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <p class="dsub" id="dsub"></p>
@@ -198,6 +242,8 @@
   <div class="dbody" id="dbody"></div>
 </aside>
 
+<script src="/vendor/xterm.js"></script>
+<script src="/vendor/addon-fit.js"></script>
 <script>
 /* ---------- modo demonstração (?demo): dados fictícios gerados aqui, sem servidor ---------- */
 const QS = new URLSearchParams(location.search), DEMO = QS.has('demo');
@@ -280,7 +326,7 @@ const ago = t => { const s = Math.max(0, nowSec() - t); return s < 60 ? `há ${M
 if (QS.get('theme')) document.documentElement.dataset.theme = QS.get('theme');
 
 const HIST = 60, hist = {}, memHist = {}, kHist = { agents: [], cpu: [], mem: [], tasks: [] };
-let data = null, mode = QS.get('mode') === 'fun' ? 'fun' : QS.get('mode') === 'sober' ? 'sober' : load('wt-mode', 'sober');
+let data = null, mode = ['sober', 'fun', 'term'].includes(QS.get('mode')) ? QS.get('mode') : load('wt-mode', 'sober');
 let filter = load('wt-filter', 'all'), query = '', tab = QS.get('tab') || 'agents', drawerPath = null, drawerOpener = null;
 let pins = new Set(); try { pins = new Set(JSON.parse(load('wt-pins', '[]'))); } catch {}
 let xp = {}; try { xp = JSON.parse(load('wt-xp', '{}')); } catch {}
@@ -582,6 +628,7 @@ function procsTab(r) {
 }
 function renderDrawer() {
   if (!drawerPath || !data) return;
+  $('dterm').hidden = $('dclaude').hidden = !(TERM.enabled && TERM.authed);
   const r = rowsFor(data).find(x => x.g.path === drawerPath); if (!r) return;
   const g = r.g;
   $('dtitle').textContent = g.name; $('dbranch').textContent = g.branch; $('dbranch').hidden = !g.branch;
@@ -614,7 +661,9 @@ function render(d) {
   const today = d.events.filter(e => e.t >= startDay / 1000).length;
   [['agents', total], ['cpu', cpuAvg], ['mem', usedMem / 1e9], ['tasks', today]].forEach(([k, v]) => { kHist[k] = kHist[k].concat(v).slice(-40); });
 
-  if (!fun) {
+  if (mode === 'term') {
+    renderTermHeader(d);
+  } else if (!fun) {
     const waiting = all.filter(r => r.st === 'waiting').length;
     $('sub').textContent = `${all.filter(r => r.g.nproc).length} com atividade · ${total} agentes ativos · ${waiting} aguardando você`;
     const cnt = k => all.filter(r => k === 'all' ? true : k === 'pinned' ? r.pinned : k === 'working' ? ['working', 'hot'].includes(r.st) : r.st === k).length;
@@ -642,14 +691,185 @@ function render(d) {
   renderDrawer();
 }
 
+/* ---------- terminais (opt-in: wt-monitor --terminals) ---------- */
+const TERM = { enabled: false, authed: false, token: '', metas: [], panes: new Map(), active: null, layout: Number(QS.get('layout')) || Number(load('wt-tlayout', '1')) || 1, demoId: 0 };
+const enc = new TextEncoder();
+async function termInit() {
+  if (DEMO) { TERM.enabled = true; TERM.authed = true; TERM.token = 'demo'; return; }
+  takeTokenFromHash();
+  TERM.token = load('wt-token', '');
+  await termPoll();
+}
+// O token chega uma vez no fragmento do link (#token=…), que nunca é enviado ao servidor; guardamos e limpamos o endereço.
+// Colar o link numa aba já aberta é só uma troca de fragmento (a página não recarrega), por isso também ouvimos `hashchange`.
+function takeTokenFromHash() {
+  const m = /[#&]token=([0-9a-f]{64})/.exec(location.hash);
+  if (!m) return false;
+  store('wt-token', m[1]); TERM.token = m[1];
+  history.replaceState(null, '', location.pathname + location.search);
+  return true;
+}
+addEventListener('hashchange', () => { if (!DEMO && takeTokenFromHash()) termPoll(); });
+async function termPoll() {
+  try {
+    const r = await fetch('/api/terminals', { headers: termHeaders() });
+    if (!r.ok) { TERM.enabled = false; return updateTermAvailability(); }
+    const j = await r.json();
+    TERM.enabled = !!j.enabled; TERM.authed = !!j.auth;
+    if (TERM.authed) { TERM.metas = j.terms; termReconcile(); } else updateTermAvailability();
+  } catch { /* servidor fora do ar: tenta de novo no próximo ciclo */ }
+}
+const AUTH_NOTE = 'Os terminais estão habilitados no servidor, mas este navegador ainda não tem o token. Abra o painel pelo link gerado por “make open-terminals” (ou http://127.0.0.1:PORTA/#token=…, com o conteúdo de “wt-monitor --print-token”).';
+function updateTermAvailability() {
+  const usable = TERM.enabled && TERM.authed;
+  $('segterm').hidden = !TERM.enabled;
+  $('tnew-shell').disabled = $('tnew-claude').disabled = !usable;
+  $('dterm').hidden = $('dclaude').hidden = !usable;
+  if (TERM.enabled && !TERM.authed) termNote(AUTH_NOTE); else if ($('tnote').textContent === AUTH_NOTE) termNote('');
+}
+const termHeaders = () => ({ 'X-WT': '1', 'X-WT-Token': TERM.token, 'Content-Type': 'text/plain' });
+function termTheme() {
+  const v = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const bg = v('--bg'), lum = [1, 3, 5].reduce((a, i, k) => a + parseInt(bg.slice(i, i + 2), 16) * [.299, .587, .114][k], 0);
+  const dark = { black: '#484f58', red: '#ff7b72', green: '#3ecf8e', yellow: '#e3b341', blue: '#79c0ff', magenta: '#d2a8ff', cyan: '#56d4dd', white: '#c9d1d9',
+    brightBlack: '#6e7681', brightRed: '#ffa198', brightGreen: '#56d364', brightYellow: '#f2cc60', brightBlue: '#a5d6ff', brightMagenta: '#e2c5ff', brightCyan: '#76e3ea', brightWhite: '#f0f6fc' };
+  const light = { black: '#24292f', red: '#cf222e', green: '#116329', yellow: '#9a6700', blue: '#0550ae', magenta: '#8250df', cyan: '#1b7c83', white: '#6e7781',
+    brightBlack: '#57606a', brightRed: '#a40e26', brightGreen: '#1a7f37', brightYellow: '#7d4e00', brightBlue: '#0969da', brightMagenta: '#a475f9', brightCyan: '#3192aa', brightWhite: '#8c959f' };
+  return { ...(lum > 140 ? light : dark), background: bg, foreground: v('--text'), cursor: v('--accent'), cursorAccent: bg, selectionBackground: v('--accent') + '44' };
+}
+async function newTerminal(path, kind) {
+  if (!TERM.enabled || !TERM.authed) return;
+  if (DEMO) {
+    const g = (data ? data.groups : []).find(x => x.path === path);
+    const meta = { id: ++TERM.demoId, path, name: g ? g.name : path.split('/').slice(-2).join('/'), kind, alive: true };
+    TERM.metas.push(meta); termReconcile(); termActivate(meta.id); return meta.id;
+  }
+  const r = await fetch('/api/terminals', { method: 'POST', headers: termHeaders(), body: `path=${encodeURIComponent(path)}&kind=${kind}&cols=100&rows=30` });
+  if (r.status === 403) { TERM.authed = false; TERM.token = ''; store('wt-token', ''); updateTermAvailability(); return; }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { termNote(j.error || `não foi possível abrir o terminal (${r.status})`); return; }
+  await termPoll(); termActivate(j.id); return j.id;
+}
+function termNote(msg) { const n = $('tnote'); n.textContent = msg; n.hidden = !msg; }
+async function closeTerminal(id) {
+  if (!DEMO) await fetch(`/api/terminals/${id}`, { method: 'DELETE', headers: termHeaders() }).catch(() => {});
+  else TERM.metas = TERM.metas.filter(m => m.id !== id);
+  const pane = TERM.panes.get(id);
+  if (pane) { pane.removed = true; pane.ws && pane.ws.close(); pane.ro.disconnect(); pane.xterm.dispose(); pane.el.remove(); TERM.panes.delete(id); }
+  TERM.metas = TERM.metas.filter(m => m.id !== id);
+  if (TERM.active === id) TERM.active = TERM.metas[0]?.id ?? null;
+  renderTerms();
+}
+function termReconcile() {
+  TERM.metas.forEach(m => { if (!TERM.panes.has(m.id)) createPane(m); else { const p = TERM.panes.get(m.id); p.meta = m; } });
+  for (const [id, p] of TERM.panes) if (!TERM.metas.some(m => m.id === id)) { p.removed = true; p.ws && p.ws.close(); p.ro.disconnect(); p.xterm.dispose(); p.el.remove(); TERM.panes.delete(id); }
+  if (TERM.active === null || !TERM.panes.has(TERM.active)) TERM.active = TERM.metas[0]?.id ?? null;
+  updateTermAvailability();
+  renderTerms();
+}
+function createPane(meta) {
+  if (typeof Terminal === 'undefined') { termNote('O emulador de terminal não carregou (/vendor/xterm.js).'); return; }
+  const el = document.createElement('section');
+  el.className = 'card tpane'; el.dataset.id = meta.id;
+  el.innerHTML = `<div class="thead2"><span class="dot" style="background:var(--work)"></span><span class="nm"></span><span class="faint mono kd"></span><span class="st"></span></div><div class="tbody"></div>`;
+  el.querySelector('.nm').textContent = meta.name;
+  $('tgrid').appendChild(el);
+  const xterm = new Terminal({ fontFamily: '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 13, cursorBlink: true, scrollback: 5000, theme: termTheme(), allowProposedApi: false });
+  const fit = new FitAddon.FitAddon();
+  xterm.loadAddon(fit);
+  xterm.open(el.querySelector('.tbody'));
+  const pane = { meta, el, xterm, fit, ws: null, removed: false, status: 'conectando…', ro: null, retry: null };
+  pane.ro = new ResizeObserver(() => { if (pane.fitRaf) return; pane.fitRaf = requestAnimationFrame(() => { pane.fitRaf = 0; fitPane(pane); }); });
+  pane.ro.observe(el.querySelector('.tbody'));
+  xterm.onData(d => { if (pane.ws && pane.ws.readyState === 1) pane.ws.send(enc.encode(d)); });
+  xterm.onBinary(d => { if (pane.ws && pane.ws.readyState === 1) pane.ws.send(Uint8Array.from(d, c => c.charCodeAt(0))); });
+  xterm.onResize(({ cols, rows }) => { if (pane.ws && pane.ws.readyState === 1) pane.ws.send(JSON.stringify({ resize: [cols, rows] })); });
+  el.addEventListener('focusin', () => { if (TERM.active !== meta.id) { TERM.active = meta.id; renderTermTabs(); } });
+  TERM.panes.set(meta.id, pane);
+  DEMO ? demoConnect(pane) : connectPane(pane);
+}
+function fitPane(pane) {
+  if (pane.el.hidden || !pane.el.offsetParent) return;
+  try { pane.fit.fit(); } catch { /* contêiner ainda sem tamanho */ }
+}
+function connectPane(pane) {
+  const { meta } = pane;
+  const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/term/${meta.id}`);
+  ws.binaryType = 'arraybuffer';
+  pane.ws = ws;
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ token: TERM.token }));
+    pane.xterm.reset(); // o servidor reenvia a saída acumulada
+    pane.status = meta.alive === false ? 'encerrado' : 'conectado'; renderTermTabs();
+    if (pane.xterm.cols) ws.send(JSON.stringify({ resize: [pane.xterm.cols, pane.xterm.rows] }));
+  };
+  ws.onmessage = e => {
+    if (typeof e.data === 'string') {
+      let j = {}; try { j = JSON.parse(e.data); } catch {}
+      if ('exit' in j) { meta.alive = false; meta.exit = j.exit; pane.status = `encerrado (${j.exit})`; pane.xterm.write(`\r\n\x1b[2m[processo encerrado com código ${j.exit}]\x1b[0m\r\n`); renderTermTabs(); }
+    } else pane.xterm.write(new Uint8Array(e.data));
+  };
+  ws.onclose = () => {
+    pane.ws = null;
+    if (pane.removed) return;
+    if (meta.alive !== false) { pane.status = 'reconectando…'; renderTermTabs(); pane.retry = setTimeout(() => !pane.removed && connectPane(pane), 1500); }
+  };
+}
+/* terminais simulados no modo ?demo (sem servidor): só para a documentação e para mexer na interface */
+function demoConnect(pane) {
+  const { meta, xterm } = pane, g = '\x1b[32m', b = '\x1b[34m', r = '\x1b[31m', y = '\x1b[33m', d = '\x1b[2m', z = '\x1b[0m';
+  const dir = '~/projects/' + meta.name, prompt = `${g}dev@workstation${z}:${b}${dir}${z}$ `;
+  pane.status = 'demonstração';
+  const script = meta.kind === 'claude'
+    ? `${prompt}claude\r\n\r\n${y}✻${z} Claude Code ${d}(demonstração)${z}\r\n${d}${dir}${z}\r\n\r\n> Adicione paginação na listagem de pedidos\r\n\r\n${g}●${z} Vou dividir o trabalho entre agentes especializados.\r\n  ${d}⎿ Agent(backend): Implementar paginação nos endpoints${z}\r\n  ${d}⎿ Agent(frontend): Ajustar a listagem${z}\r\n\r\n${g}●${z} Backend e frontend concluídos; 14 testes passando.\r\n\r\n> `
+    : `${prompt}git status\r\nOn branch feat/order-pagination\r\nChanges not staged for commit:\r\n  ${r}modified:   src/orders/list.ts${z}\r\n  ${r}modified:   src/orders/list.test.ts${z}\r\n\r\n${prompt}npm test -- orders\r\n\r\n ${g}PASS${z}  src/orders/list.test.ts\r\n  ${g}✓${z} lists the first page (4 ms)\r\n  ${g}✓${z} respects pageSize (2 ms)\r\n\r\nTests:       14 passed, 14 total\r\n\r\n${prompt}`;
+  xterm.write(script);
+}
+function visiblePanes() {
+  const ids = TERM.metas.map(m => m.id).filter(id => TERM.panes.has(id));
+  if (!ids.length) return [];
+  const n = Math.min(TERM.layout, ids.length), i = Math.max(0, ids.indexOf(TERM.active));
+  return Array.from({ length: n }, (_, k) => ids[(i + k) % ids.length]);
+}
+function renderTermTabs() {
+  setHTML($('ttabs'), TERM.metas.map(m => {
+    const p = TERM.panes.get(m.id), alive = m.alive !== false;
+    return `<div class="ttab${m.id === TERM.active ? ' on' : ''}"><button type="button" role="tab" aria-selected="${m.id === TERM.active}" data-tab="${m.id}"><span class="dot${alive ? '' : ' off'}" style="${alive ? 'background:var(--work)' : ''}"></span>${esc(m.name)} <span class="faint">· ${m.kind === 'claude' ? 'claude' : 'shell'} #${m.id}</span></button><button type="button" class="x" data-close="${m.id}" aria-label="Fechar o terminal ${m.id} de ${esc(m.name)}">×</button></div>`;
+  }).join(''));
+  for (const [id, p] of TERM.panes) {
+    p.el.querySelector('.kd').textContent = p.meta.kind === 'claude' ? 'claude' : 'shell';
+    p.el.querySelector('.st').textContent = p.status;
+    p.el.querySelector('.dot').style.background = p.meta.alive === false ? 'var(--idle)' : 'var(--work)';
+    p.el.classList.toggle('on', id === TERM.active);
+  }
+}
+function renderTerms() {
+  const vis = visiblePanes();
+  $('tgrid').dataset.layout = String(TERM.layout);
+  for (const [id, p] of TERM.panes) { const show = vis.includes(id); if (p.el.hidden === show) { p.el.hidden = !show; } }
+  document.querySelectorAll('#tlayout button').forEach(b => b.setAttribute('aria-pressed', Number(b.dataset.layout) === TERM.layout));
+  $('tempty').hidden = TERM.metas.length > 0;
+  $('tsub').textContent = TERM.metas.length ? `${TERM.metas.filter(m => m.alive !== false).length} ativo(s) · iniciados pelo painel` : 'terminais iniciados pelo painel';
+  renderTermTabs();
+  requestAnimationFrame(() => vis.forEach(id => fitPane(TERM.panes.get(id))));
+}
+function termActivate(id) { TERM.active = id; renderTerms(); const p = TERM.panes.get(id); if (p) p.xterm.focus(); }
+function renderTermHeader(d) {
+  const sel = $('twt'), cur = sel.value, names = new Map(d.groups.map(g => [g.path, g.name]));
+  pins.forEach(p => { if (!names.has(p)) names.set(p, p.startsWith(d.root + '/') ? p.slice(d.root.length + 1) : p); });
+  const html = [...names].map(([path, name]) => `<option value="${esc(path)}">${esc(name)}</option>`).join('');
+  if (sel._h !== html) { sel.innerHTML = html; sel._h = html; if (cur && names.has(cur)) sel.value = cur; else if (drawerPath && names.has(drawerPath)) sel.value = drawerPath; }
+}
+
 /* ---------- eventos ---------- */
 function setMode(m) {
   mode = m; store('wt-mode', m);
-  $('overview').hidden = m === 'fun'; $('arena').hidden = m !== 'fun';
-  document.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === m));
+  $('overview').hidden = m !== 'sober'; $('arena').hidden = m !== 'fun'; $('terms').hidden = m !== 'term';
+  if (m === 'term') renderTerms();
+  document.querySelectorAll('.seg [data-mode]').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === m));
   if (data) render(data);
 }
-document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+document.querySelectorAll('.seg [data-mode]').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
 $('filters').addEventListener('click', e => { const b = e.target.closest('[data-filter]'); if (b) { filter = b.dataset.filter; store('wt-filter', filter); render(data); } });
 $('q').addEventListener('input', e => { query = e.target.value.trim().toLowerCase(); if (data) render(data); });
 function togglePin(path) { pins.has(path) ? pins.delete(path) : pins.add(path); store('wt-pins', JSON.stringify([...pins])); render(data); }
@@ -659,9 +879,20 @@ for (const id of ['rows', 'stations']) $(id).addEventListener('click', e => {
   openDrawer(el.dataset.path, el.querySelector('.wt-name'));
 });
 $('dpin').addEventListener('click', () => togglePin(drawerPath));
+async function openTermFromDrawer(kind) { const path = drawerPath; closeDrawer(); setMode('term'); await newTerminal(path, kind); }
+$('dterm').addEventListener('click', () => openTermFromDrawer('shell'));
+$('dclaude').addEventListener('click', () => openTermFromDrawer('claude'));
+$('tnew-shell').addEventListener('click', () => { const p = $('twt').value; if (p) newTerminal(p, 'shell'); });
+$('tnew-claude').addEventListener('click', () => { const p = $('twt').value; if (p) newTerminal(p, 'claude'); });
+$('tlayout').addEventListener('click', e => { const b = e.target.closest('[data-layout]'); if (b) { TERM.layout = Number(b.dataset.layout); store('wt-tlayout', String(TERM.layout)); renderTerms(); } });
+$('ttabs').addEventListener('click', e => {
+  const c = e.target.closest('[data-close]'), t = e.target.closest('[data-tab]');
+  if (c) closeTerminal(Number(c.dataset.close)); else if (t) termActivate(Number(t.dataset.tab));
+});
 $('dclose').addEventListener('click', closeDrawer); $('scrim').addEventListener('click', closeDrawer);
 $('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) { tab = b.dataset.tab; renderDrawer(); } });
 document.addEventListener('keydown', e => {
+  if (e.target.closest && e.target.closest('.xterm')) return; // dentro do terminal, as teclas são do terminal
   if (e.key === 'Escape' && drawerPath) closeDrawer();
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); $('q').focus(); }
 });
@@ -675,8 +906,20 @@ async function tick() {
     if (o && !tick.opened) { tick.opened = true; const g = d.groups.find(x => x.name === o); if (g) openDrawer(g.path, null); }
   } catch { $('live').textContent = 'sem conexão'; }
 }
-setMode(mode);
-tick(); setInterval(tick, 1000); setInterval(pollActivity, 1000);
+(async () => {
+  await termInit();
+  if (mode === 'term' && !TERM.enabled) mode = 'sober';
+  updateTermAvailability();
+  setMode(mode);
+  if (DEMO && TERM.enabled && QS.get('mode') === 'term') { // ?demo&mode=term abre alguns terminais simulados
+    await tick();
+    const by = n => (data.groups.find(g => g.name === n) || {}).path;
+    for (const [n, k] of [['acme/api', 'shell'], ['acme/api', 'claude'], ['acme/web', 'shell'], ['tools/cli', 'shell']]) if (by(n)) await newTerminal(by(n), k);
+    termActivate(1);
+  }
+  tick(); setInterval(tick, 1000); setInterval(pollActivity, 1000);
+  if (!DEMO) setInterval(() => { if (TERM.enabled) termPoll(); }, 3000);
+})();
 </script>
 </body>
 </html>
