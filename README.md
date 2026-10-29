@@ -177,6 +177,10 @@ How it works and what to know:
 - It needs cgroup v2 with `cpu` and `memory` delegated to your user (the default on current Ubuntu/Fedora with a systemd user session). Otherwise the tab says why it is unavailable and nothing is changed. `memory.low` additionally needs the `memory_recursiveprot` mount option (systemd sets it by default).
 - Each change requires the same token as the terminals; see [SECURITY.md](SECURITY.md).
 
+## Example skills and agents
+
+[`examples/`](examples/README.md) has generic, copy-ready versions of three roles that pair well with this dashboard: **PO intake** (request → spec → tasks), **Agile coach** (the one role that owns the task board) and **Agent orchestration** (parallel implementers, one worktree each, plus reviewers and QA). Copy them into `.claude/skills` and `.claude/agents`; running them shows the skill and the sub-agents in the dashboard.
+
 ## Pinning each worktree to its own CPU cores
 
 The dashboard shows affinity; setting it is a one-liner, and children inherit it (to *prioritise* instead of pinning, see above):

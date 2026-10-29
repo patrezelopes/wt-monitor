@@ -177,6 +177,10 @@ Como funciona e o que saber:
 - Exige cgroup v2 com `cpu` e `memory` delegados ao seu usuário (o padrão no Ubuntu/Fedora atuais com sessão systemd de usuário). Caso contrário, a aba explica por que está indisponível e nada é alterado. O `memory.low` precisa ainda da opção de montagem `memory_recursiveprot` (o systemd a ativa por padrão).
 - Cada mudança exige o mesmo token dos terminais; veja o [SECURITY.md](SECURITY.md).
 
+## Exemplos de skills e agentes
+
+A pasta [`examples/`](examples/README.md) traz versões genéricas, prontas para copiar, de três papéis que combinam com este painel: **PO intake** (pedido → spec → tarefas), **Agile coach** (o único papel dono do board de tarefas) e **Orquestração de agentes** (implementadores em paralelo, um worktree cada, mais revisores e QA). Copie para `.claude/skills` e `.claude/agents`; ao rodá-los, o painel mostra a skill e os subagentes. Os arquivos estão em inglês.
+
 ## Um worktree por conjunto de cores
 
 O painel mostra a afinidade; configurá-la é uma linha, e os processos filhos herdam (para *priorizar* em vez de fixar, veja acima):
