@@ -14,12 +14,17 @@ Um único binário, **sem dependências** (só a biblioteca padrão do Rust), s�
 |---|---|
 | ![sessão](docs/img/session.png) | ![arena](docs/img/arena.png) |
 
+| Terminais iniciados pelo painel (opt-in), quatro lado a lado |
+|---|
+| ![terminais](docs/img/terminals.png) |
+
 ## Recursos
 
 - **Visão por worktree** – os processos são agrupados pelo diretório mais próximo que contém `.git` (arquivo nos worktrees ligados, pasta nos repositórios normais). Branch, status, CPU %, memória, threads, afinidade e gráficos de 60 s.
 - **Agentes, skills e subagentes** – nos worktrees com Claude Code mostra quais agentes estão rodando (o principal e cada subagente em execução, com tipo e modelo), a **skill** em uso, a ferramenta em que cada subagente está e **quem fala com quem** (delegações, `SendMessage`, conclusões). Cada worktree recebe um status derivado: *trabalhando*, *aguardando você*, *ocioso* ou *no limite* (veja [Como o status é derivado](docs/architecture.md#status)).
 - **Detalhe da sessão** – clique num worktree para abrir uma gaveta com abas: visão geral, agentes (topologia + conversa entre agentes), feed de atividade ao vivo (pedidos, mensagens do agente, ferramentas e resultados) e processos.
 - **Dois visuais, um botão** – *Visão geral*, uma tabela densa no estilo dos painéis modernos (escuro e claro, segue o sistema), e *Arena*, em que cada worktree é um robozinho com seus subagentes ligados a ele e pacotes de mensagem viajando entre eles. Digita quando está ocupado, dorme quando está parado, comemora ao terminar uma tarefa e ganha XP/níveis. Respeita `prefers-reduced-motion`.
+- **Terminais (opt-in)** – abra terminais de verdade — um shell de login, ou o `claude` — dentro do painel, agrupados por worktree e exibidos 1, 2 ou 4 por vez. Só terminais **iniciados pelo painel** são gerenciados. Veja [Terminais](#terminais-opt-in).
 - **Filtros, busca e fixados** – filtre por status, busque por worktree, branch, agente ou skill (`Ctrl K`) e marque com ★ os worktrees que importam; eles ficam no topo mesmo sem processos.
 - **Notificações do desktop** (via `notify-send`) para CPU/memória altas em um worktree, memória alta do sistema e **quando um agente termina uma tarefa**, com a última mensagem dele.
 - **Barras de CPU por core**, memória do sistema e load.
@@ -76,20 +81,41 @@ Cada alerta dispara uma vez, rearma quando o valor volta ao normal e espera pelo
 
 Parâmetros de URL: `?mode=sober|fun`, `?theme=dark|light`, `?demo` e, com `?demo`, também `?open=<nome do worktree>&tab=agents|activity|procs|overview`.
 
+## Terminais (opt-in)
+
+O painel pode abrir terminais por conta própria. Isso vem **desligado por padrão**: permite que uma página web inicie shells como você, então leia antes o [SECURITY.md](SECURITY.md).
+
+```bash
+make run TERMINALS=1          # ou: wt-monitor --terminals   (WT_TERMINALS=1 também funciona)
+make install TERMINALS=1      # o mesmo, como serviço de usuário do systemd
+make open-terminals           # abre o painel com o token de uso único no link
+```
+
+Um segredo aleatório de 256 bits é criado no primeiro uso em `~/.config/wt-monitor/token` (modo `0600`) e nunca é devolvido pela API. O `make open-terminals` abre `http://127.0.0.1:8765/#token=…` uma vez; o navegador guarda o token (o fragmento nunca é enviado ao servidor) e o link some da barra de endereço. Sem o token, a aba *Terminais* explica como obtê-lo e os botões ficam desativados.
+
+- **Aba "Terminais"**: escolha um worktree e clique em *Novo terminal* (um shell de login naquele worktree, então valem o seu `PATH`, o `nvm` e a troca de conta por pasta; usa `/bin/bash` quando `$SHELL` não está definido, como nos serviços de usuário do systemd) ou *Novo Claude* (o mesmo shell, com `claude` já digitado). A gaveta da sessão tem os mesmos dois botões.
+- **Conjuntos**: os terminais ficam agrupados por worktree em abas; o seletor `1 / 2 / 4` mostra essa quantidade lado a lado. Fechar uma aba encerra o grupo de processos do terminal.
+- **Reconexão**: os terminais vivem no servidor, não na página. Recarregue ou reabra o navegador e eles voltam com os últimos 256 KB de saída; os encerrados continuam listados por 10 minutos com o código de saída. No máximo 16 ao mesmo tempo.
+- Só terminais **iniciados pelo painel** são gerenciados; ele nunca se conecta a terminais que você abriu em outro lugar.
+
+O PTY e o WebSocket são implementados só com a biblioteca padrão (sem crates); o emulador de terminal é o [xterm.js](vendor/xterm/README.md), embutido no binário.
+
 ## Alvos do make
 
-`make` sem argumentos mostra esta lista. Variáveis que você pode sobrescrever: `ROOT` (padrão `~/dev`), `PORT` (`8765`), `PREFIX` (`~/.local`), `CONFIG_DIRS` (pastas de config do Claude para o hook; padrão: todas).
+`make` sem argumentos mostra esta lista. Variáveis que você pode sobrescrever: `ROOT` (padrão `~/dev`), `PORT` (`8765`), `PREFIX` (`~/.local`), `TERMINALS` (`1` habilita os terminais), `CONFIG_DIRS` (pastas de config do Claude para o hook; padrão: todas).
 
 | Alvo | O que faz |
 |---|---|
 | `make build` | Compila o binário otimizado |
-| `make run` | Roda em primeiro plano em `ROOT`/`PORT` |
+| `make run` | Roda em primeiro plano em `ROOT`/`PORT` (`TERMINALS=1` habilita os terminais) |
+| `make open-terminals` | Abre o painel com o token de uso único dos terminais no link |
 | `make open` | Abre o painel no navegador padrão |
 | `make test` | Testes unitários |
 | `make fmt` / `make fmt-check` | Formata / confere a formatação |
 | `make lint` | `clippy`, avisos viram erros |
 | `make js-check` | Confere a sintaxe do script da página (precisa do `node`) |
-| `make check` | Tudo que o CI roda: `fmt-check`, `lint`, `test`, `js-check` |
+| `make check` | `fmt-check`, `lint`, `test`, `js-check` |
+| `make e2e` | Testes de ponta a ponta dos terminais, por HTTP/WebSocket e num Chrome headless de verdade (o CI roda `check` e `e2e`) |
 | `make install` | Compila, instala em `PREFIX/bin`, ativa e (re)inicia o serviço de usuário |
 | `make uninstall` | Para e remove o serviço e o binário |
 | `make restart` / `status` / `logs` | Gerencia o serviço (`logs` acompanha o `journalctl`) |
@@ -114,6 +140,7 @@ Ferramentas de build dimensionam seus workers pelo total de CPUs da máquina, n�
 
 ## Segurança e privacidade
 
+- Os terminais, quando habilitados, são protegidos por um token que a API nunca expõe, verificações de `Origin`/`Host` e um conjunto fechado de comandos — detalhes e modelo de ameaças no [SECURITY.md](SECURITY.md).
 - Escuta **somente em 127.0.0.1** e rejeita qualquer cabeçalho `Host` diferente de `127.0.0.1:<porta>` / `localhost:<porta>` (proteção contra DNS rebinding).
 - `POST /event` exige o cabeçalho `X-WT: 1`, que força um preflight de CORS; outras páginas abertas no navegador não conseguem injetar eventos falsos.
 - O preview e as telas de agentes leem as transcrições do Claude Code (e as dos subagentes) em `~/.claude*/projects/` **apenas de worktrees dentro da raiz monitorada**; o caminho pedido é validado e nunca vira leitura de arquivo arbitrário. Transcrições podem ter conteúdo sensível — o preview é tão privado quanto a sua interface de loopback.
@@ -126,7 +153,7 @@ Veja [docs/architecture.md](docs/architecture.md).
 
 ## Limitações
 
-Só Linux. A memória é a soma do RSS, então páginas compartilhadas entre processos são contadas mais de uma vez. A detecção de tarefas usa o hook `Stop` do Claude Code, que dispara após *toda* resposta concluída, não só em tarefas longas. A detecção de agentes, skills e *aguardando você* é **inferida dos arquivos de transcrição** (o formato não é uma API estável) e é uma heurística de melhor esforço. A interface usa Inter / JetBrains Mono quando instaladas e cai para as fontes do sistema; não faz nenhuma requisição de rede.
+Só Linux. Os terminais executam o seu shell de login e são limitados a 16; não se conectam a sessões que você iniciou em outro lugar. A memória é a soma do RSS, então páginas compartilhadas entre processos são contadas mais de uma vez. A detecção de tarefas usa o hook `Stop` do Claude Code, que dispara após *toda* resposta concluída, não só em tarefas longas. A detecção de agentes, skills e *aguardando você* é **inferida dos arquivos de transcrição** (o formato não é uma API estável) e é uma heurística de melhor esforço. A interface usa Inter / JetBrains Mono quando instaladas e cai para as fontes do sistema; não faz nenhuma requisição de rede.
 
 ## Contribuir e licença
 

@@ -14,12 +14,17 @@ Single static binary, **zero dependencies** (Rust standard library only), Linux 
 |---|---|
 | ![session](docs/img/session.png) | ![arena](docs/img/arena.png) |
 
+| Terminals started by the panel (opt-in), four side by side |
+|---|
+| ![terminals](docs/img/terminals.png) |
+
 ## Features
 
 - **Per-worktree view** – processes are grouped by the nearest directory containing `.git` (a file in linked worktrees, a folder in normal repos). Branch, status, CPU %, memory, threads, CPU affinity, and 60 s history charts.
 - **Agents, skills and sub-agents** – for Claude Code worktrees it shows which agents are running (the main agent plus each running sub-agent with its type and model), the **skill** in use, the tool each sub-agent is on, and **who is talking to whom** (delegations, `SendMessage`, completions). A status is derived for each worktree: *working*, *waiting for you*, *idle* or *at the limit* (see [How status is derived](docs/architecture.md#status)).
 - **Session detail** – click a worktree to open a drawer with tabs: overview, agents (topology + conversation between agents), live activity feed (prompts, agent messages, tool calls, results) and processes.
 - **Two looks, one switch** – *Overview*, a dense table in the style of modern dashboards (dark and light, follows your system), and *Arena*, where each worktree is a small robot with its sub-agents wired to it and message packets travelling between them. It types when busy, sleeps when idle, celebrates when a task finishes, and earns XP/levels. Respects `prefers-reduced-motion`.
+- **Terminals (opt-in)** – open real terminals — a login shell, or `claude` — inside the dashboard, grouped by worktree and shown 1, 2 or 4 at a time. Only terminals **started by the panel** are managed. See [Terminals](#terminals-opt-in).
 - **Filters, search and pins** – filter by status, search by worktree, branch, agent or skill (`Ctrl K`), and ★ pin the worktrees you care about; they stay on top even with no running processes.
 - **Desktop notifications** (via `notify-send`) for high CPU / memory in a worktree, high system memory, and **when an agent finishes a task**, including its last message.
 - **Per-core CPU bars**, system memory and load.
@@ -76,20 +81,41 @@ Each alert fires once, re-arms when the value returns to normal, and waits at le
 
 URL parameters: `?mode=sober|fun`, `?theme=dark|light`, `?demo`, and with `?demo` also `?open=<worktree name>&tab=agents|activity|procs|overview`.
 
+## Terminals (opt-in)
+
+The dashboard can run terminals itself. This is **off by default**: it lets a web page start shells as you, so read [SECURITY.md](SECURITY.md) first.
+
+```bash
+make run TERMINALS=1          # or: wt-monitor --terminals   (WT_TERMINALS=1 also works)
+make install TERMINALS=1      # same, as the systemd user service
+make open-terminals           # opens the dashboard with the one-time token in the link
+```
+
+A random 256-bit secret is created on first use in `~/.config/wt-monitor/token` (mode `0600`) and is never returned by the API. `make open-terminals` opens `http://127.0.0.1:8765/#token=…` once; the browser remembers the token (the fragment is never sent to the server) and the link is cleaned from the address bar. Without the token the *Terminals* tab explains how to get it and its buttons stay disabled.
+
+- **Tab "Terminais"**: pick a worktree and click *Novo terminal* (a login shell in that worktree, so your `PATH`, `nvm` and per-folder account switching apply; it falls back to `/bin/bash` when `$SHELL` is not set, as in systemd user services) or *Novo Claude* (the same shell, with `claude` already typed). The session drawer has the same two buttons.
+- **Sets**: terminals are grouped by worktree in tabs; the `1 / 2 / 4` switch shows that many side by side. Closing a tab kills the terminal's process group.
+- **Reconnect**: terminals live in the server, not in the page. Reload or reopen the browser and they come back with the last 256 KB of output; ended terminals stay listed for 10 minutes with their exit code. At most 16 run at once.
+- Only terminals **started by the panel** are managed; it never attaches to terminals you opened elsewhere.
+
+The PTY and the WebSocket are implemented with the standard library only (no crates); the terminal emulator is [xterm.js](vendor/xterm/README.md), embedded in the binary.
+
 ## Make targets
 
-`make` with no arguments prints this list. Variables you can override: `ROOT` (default `~/dev`), `PORT` (`8765`), `PREFIX` (`~/.local`), `CONFIG_DIRS` (Claude config dirs for the hook; default all).
+`make` with no arguments prints this list. Variables you can override: `ROOT` (default `~/dev`), `PORT` (`8765`), `PREFIX` (`~/.local`), `TERMINALS` (`1` enables terminals), `CONFIG_DIRS` (Claude config dirs for the hook; default all).
 
 | Target | What it does |
 |---|---|
 | `make build` | Build the optimized binary |
-| `make run` | Run in the foreground on `ROOT`/`PORT` |
+| `make run` | Run in the foreground on `ROOT`/`PORT` (`TERMINALS=1` enables terminals) |
+| `make open-terminals` | Open the dashboard with the one-time terminal token in the link |
 | `make open` | Open the dashboard in the default browser |
 | `make test` | Unit tests |
 | `make fmt` / `make fmt-check` | Format / check formatting |
 | `make lint` | `clippy`, warnings are errors |
 | `make js-check` | Syntax-check the page script (needs `node`) |
-| `make check` | Everything CI runs: `fmt-check`, `lint`, `test`, `js-check` |
+| `make check` | `fmt-check`, `lint`, `test`, `js-check` |
+| `make e2e` | End-to-end tests of the terminals, over HTTP/WebSocket and in a real headless Chrome (CI runs `check` and `e2e`) |
 | `make install` | Build, install to `PREFIX/bin`, enable + (re)start the systemd user service |
 | `make uninstall` | Stop and remove the service and binary |
 | `make restart` / `status` / `logs` | Manage the service (`logs` follows `journalctl`) |
@@ -114,6 +140,7 @@ Build tools size their worker pools from the machine's CPU count, not from affin
 
 ## Security & privacy
 
+- Terminals, when enabled, are guarded by a token that is never exposed by the API, `Origin`/`Host` checks and a closed set of commands — details and threat model in [SECURITY.md](SECURITY.md).
 - Listens on **127.0.0.1 only** and rejects any `Host` header other than `127.0.0.1:<port>` / `localhost:<port>` (DNS-rebinding protection).
 - `POST /event` requires the custom header `X-WT: 1`, which forces a CORS preflight, so other web pages in your browser cannot inject fake events.
 - The preview and agent views read Claude Code transcripts (and sub-agent transcripts) under `~/.claude*/projects/` **only for worktrees inside the watched root**; the requested path is validated and never used to read arbitrary files. Transcripts can contain sensitive content — the preview is as private as your loopback interface.
@@ -126,7 +153,7 @@ See [docs/architecture.md](docs/architecture.md).
 
 ## Limitations
 
-Linux only. Memory is the sum of RSS, so pages shared between processes are counted more than once. Task detection relies on Claude Code's `Stop` hook, which fires after *every* completed response, not only long tasks. Agent, skill and *waiting for you* detection is **inferred from the transcript files** (their format is not a stable API) and is a best-effort heuristic. The UI uses Inter / JetBrains Mono when installed and falls back to system fonts; it makes no network requests.
+Linux only. Terminals run your login shell and are limited to 16; they do not attach to sessions you started elsewhere. Memory is the sum of RSS, so pages shared between processes are counted more than once. Task detection relies on Claude Code's `Stop` hook, which fires after *every* completed response, not only long tasks. Agent, skill and *waiting for you* detection is **inferred from the transcript files** (their format is not a stable API) and is a best-effort heuristic. The UI uses Inter / JetBrains Mono when installed and falls back to system fonts; it makes no network requests.
 
 ## Contributing & license
 

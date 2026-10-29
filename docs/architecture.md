@@ -8,7 +8,7 @@
                   └── alerts ──► notify-send               └── GET /api/preview ──► ~/.claude*/projects/**.jsonl
 ```
 
-Everything is in `src/main.rs` (std only) plus `index.html`, embedded with `include_str!`.
+Rust standard library only. `src/main.rs` holds the sampler, alerts and HTTP server; `src/terms.rs`, `src/pty.rs` and `src/ws.rs` implement the opt-in terminals. The UI is `index.html` plus the vendored xterm.js, all embedded with `include_str!`.
 
 ## Sampler
 
@@ -61,6 +61,25 @@ The browser polls one worktree per second (each every 5 s, the open one every 2 
 ## UI
 
 A single page, no build step, no libraries, no network requests. Rows and arena stations are reconciled by key (`sync()`) and cell contents are only rewritten when they change (`setHTML()`), so focus and CSS animations survive the 1 Hz refresh. *Overview* and *Arena* share the same data and are separate render functions; the session drawer is shared. Colours are CSS custom properties (dark by default, light via `prefers-color-scheme` or `?theme=`). `?demo` replaces `fetch` with a client-side generator of fake data, including sub-agents and skills.
+
+## Terminals (opt-in)
+
+Started with `--terminals`; otherwise every `/api/terminals*` and `/ws/term/*` route is 404.
+
+- **`pty.rs`** — pseudo-terminals through direct FFI to the libc that `std` already links (`posix_openpt`, `grantpt`, `unlockpt`, `ptsname_r`, `ioctl`, `setsid`). The child runs as a session leader with the slave as its controlling terminal; the master is `O_CLOEXEC` and the slave is opened `O_NOCTTY` so the server never adopts it.
+- **`ws.rs`** — RFC 6455: handshake (SHA-1 + base64, tested against the RFC vectors), masked client frames, fragmentation, ping/pong, close. Client frames must be masked; messages are capped at 1 MiB.
+- **`terms.rs`** — the registry. Each terminal has a reader thread that appends to a 256 KB ring buffer and fans out to subscribers, and a waiter thread that records the exit code. Lock order is always ring → subs → exit. Attaching sends the ring first and then live output with no gap. Dead terminals are kept 10 minutes; at most 16 exist.
+
+Routes (mutations need `X-WT: 1` + `X-WT-Token`):
+
+| Route | Purpose |
+|---|---|
+| `GET /api/terminals` | `{enabled, auth}`; with a valid token also `terms: [...]`. The token is never returned. |
+| `POST /api/terminals` | body `path=<worktree>&kind=shell\|claude&cols=&rows=` → `{id}` |
+| `DELETE /api/terminals/<id>` | SIGHUP to the process group, SIGKILL after 2 s |
+| `GET /ws/term/<id>` | WebSocket. Origin must be the dashboard's own. First message `{"token":"…"}`; then binary = keyboard, text `{"resize":[cols,rows]}`; the server sends binary output and `{"exit":N}`. |
+
+A `shell` terminal runs `$SHELL -l` (so `PATH`, `nvm` and per-folder account switching from the user's profile apply); a `claude` terminal is the same shell with `claude\n` typed. The browser keeps one xterm.js instance per terminal (`TERM.panes`), reconnects after drops, and resets and replays on reconnect. The token lives in `~/.config/wt-monitor/token` (`0600`) and reaches the browser once, through the `#token=` fragment. See [SECURITY.md](../SECURITY.md).
 
 ## Security
 

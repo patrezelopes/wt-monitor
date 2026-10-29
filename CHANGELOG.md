@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **Terminals started by the panel (opt-in).** A new *Terminals* view runs real terminals (a login shell, or `claude` in one) in a worktree, rendered with xterm.js. Open several, group them by worktree, show 1, 2 or 4 side by side, close and reconnect (the last 256 KB of output is replayed). Buttons in the session drawer open a terminal or Claude directly in that worktree. Start with `--terminals` / `make run TERMINALS=1` / `make install TERMINALS=1`.
+- `wt-monitor --print-token` and `make open-terminals`: the authorisation secret lives in a `0600` file and is delivered to the browser once, through the fragment of a link.
+- `make e2e`: end-to-end tests for the terminals over HTTP/WebSocket and in a real headless Chrome; run by CI.
+- `SECURITY.md` with the threat model, and `THIRD_PARTY_NOTICES.md`.
+
+### Notes
+- Still **zero Rust dependencies**: the PTY uses the libc that `std` already links, and WebSocket (handshake, SHA-1, base64, framing) is implemented in `src/ws.rs` with the RFC 6455 test vectors. The UI embeds xterm.js 5.5.0 (MIT) under `vendor/xterm/`; it makes no network requests.
+- Terminals are **off by default**. See [SECURITY.md](SECURITY.md) before enabling them.
+
 ## [0.2.0] - 2026-10-29
 
 ### Added

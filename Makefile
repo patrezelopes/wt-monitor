@@ -8,26 +8,32 @@ UNIT_DIR ?= $(HOME)/.config/systemd/user
 SERVICE  := wt-monitor.service
 # Claude Code config dirs for `make hooks` (default: ~/.claude and every ~/.claude-*)
 CONFIG_DIRS ?=
+# Set TERMINALS=1 to let the dashboard open terminals (opt-in; see SECURITY.md)
+TERMINALS ?=
+FLAGS := $(if $(TERMINALS), --terminals)
 
 .DEFAULT_GOAL := help
-.PHONY: help build run open test fmt fmt-check lint js-check check \
+.PHONY: help build run open open-terminals test fmt fmt-check lint js-check check e2e \
         install uninstall restart status logs linger \
         hooks hooks-uninstall hook-test screenshots clean
 
 help: ## Show this help
 	@echo "Usage: make <target> [ROOT=$(ROOT)] [PORT=$(PORT)] [PREFIX=$(PREFIX)] [CONFIG_DIRS=...]"
-	@awk 'BEGIN { FS = ":.*## " } /^[a-zA-Z_-]+:.*## / { printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
+	@awk 'BEGIN { FS = ":.*## " } /^[a-zA-Z0-9_-]+:.*## / { printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
 
 # ---- build & run ----------------------------------------------------------
 
 build: ## Build the optimized binary
 	cargo build --release
 
-run: ## Run in the foreground on ROOT/PORT (Ctrl+C to stop)
-	cargo run --release -- $(ROOT) $(PORT)
+run: ## Run in the foreground on ROOT/PORT (TERMINALS=1 enables terminals)
+	cargo run --release -- $(ROOT) $(PORT)$(FLAGS)
 
 open: ## Open the dashboard in the default browser
 	xdg-open http://127.0.0.1:$(PORT)
+
+open-terminals: build ## Open the dashboard with the one-time terminal token in the link
+	xdg-open "http://127.0.0.1:$(PORT)/#token=$$(target/release/wt-monitor --print-token)"
 
 # ---- quality ----------------------------------------------------------------
 
@@ -46,7 +52,11 @@ lint: ## Run clippy (warnings are errors)
 js-check: ## Syntax-check the page script (needs node)
 	scripts/js-check.sh
 
-check: fmt-check lint test js-check ## Everything CI runs
+check: fmt-check lint test js-check ## Static checks and unit tests
+
+e2e: build ## End-to-end tests: terminals over HTTP/WebSocket, and in a real Chrome (needs node)
+	node scripts/e2e-terminals.mjs
+	node scripts/e2e-browser.mjs
 
 # ---- systemd user service ---------------------------------------------------
 
@@ -54,12 +64,13 @@ install: build ## Build, install to PREFIX/bin and enable+start the user service
 	install -d $(BIN) $(UNIT_DIR)
 	install -m755 target/release/wt-monitor $(BIN)/wt-monitor.new
 	mv $(BIN)/wt-monitor.new $(BIN)/wt-monitor
-	sed -e 's|@BIN@|$(BIN)|' -e 's|@ROOT@|$(ROOT)|' -e 's|@PORT@|$(PORT)|' contrib/$(SERVICE).in > $(UNIT_DIR)/$(SERVICE)
+	sed -e 's|@BIN@|$(BIN)|' -e 's|@ROOT@|$(ROOT)|' -e 's|@PORT@|$(PORT)|' -e 's|@FLAGS@|$(FLAGS)|' contrib/$(SERVICE).in > $(UNIT_DIR)/$(SERVICE)
 	systemctl --user daemon-reload
 	systemctl --user enable $(SERVICE)
 	systemctl --user restart $(SERVICE)
 	@echo "wt-monitor running at http://127.0.0.1:$(PORT) (watching $(ROOT))"
 	@echo "Agent notifications: make hooks   |   start before login: make linger"
+	@if [ -n "$(TERMINALS)" ]; then echo "Terminals are ENABLED. Open once with: make open-terminals"; fi
 
 uninstall: ## Stop and remove the service and binary (hooks: make hooks-uninstall)
 	-systemctl --user disable --now $(SERVICE)
