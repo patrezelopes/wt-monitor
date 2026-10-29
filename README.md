@@ -29,6 +29,19 @@ Single static binary, **zero dependencies** (Rust standard library only), Linux 
 - **Desktop notifications** (via `notify-send`) for high CPU / memory in a worktree, high system memory, and **when an agent finishes a task**, including its last message.
 - **Per-core CPU bars**, system memory and load.
 
+## How is this different?
+
+wt-monitor sits in a different place from tools such as [Orca](https://github.com/stablyai/orca) and [Compozy](https://github.com/compozy/compozy). Those are workspaces and orchestrators: you run your agents *inside* them (Orca is a desktop IDE with a worktree per task; Compozy is a daemon that owns sessions, tasks and automations). wt-monitor is a lightweight **observer**:
+
+- It watches the agents you **already run**, in any terminal, without changing how you work.
+- It puts what the agents do (sub-agents, skills, who is talking to whom) **next to what the machine does** (CPU, memory and CPU affinity per worktree).
+- It is a single binary with no Rust dependencies, no network requests and a loopback-only server.
+- It owns only the terminals **it starts itself**, and only if you opt in.
+
+Things it deliberately does **not** try to be: an editor, an embedded browser, a diff reviewer, an SSH client, a mobile app or a scheduler. If you want those, use a tool built for them; nothing stops you from using both (we have not tested that).
+
+This comparison is based on the projects' public READMEs and docs as of October 2026. If something is out of date, please [open an issue](https://github.com/patrezelopes/wt-monitor/issues).
+
 ## Quick start
 
 Requirements: Linux, a Rust toolchain (`cargo`), and `notify-send` (package `libnotify-bin`) for notifications.

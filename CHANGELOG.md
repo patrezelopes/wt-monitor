@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- README section "How is this different?" positioning wt-monitor as a lightweight observer next to workspace and orchestrator tools.
+
+### Fixed
+- The `Makefile` finds `cargo` in `~/.cargo/bin`, so `make` works from shells where rustup's directory is not on `PATH`.
+
 ## [0.3.0] - 2026-10-29
 
 ### Added
