@@ -1,0 +1,12 @@
+[Unit]
+Description=wt-monitor: per-worktree CPU/memory dashboard
+
+[Service]
+ExecStart=%h/.local/bin/wt-monitor %h/dev 8765
+Restart=on-failure
+RestartSec=3
+# Alert thresholds (desktop notifications)
+Environment=WT_CPU_PCT=300 WT_CPU_SECS=20 WT_MEM_GB=4 WT_SYS_MEM_PCT=90
+
+[Install]
+WantedBy=default.target

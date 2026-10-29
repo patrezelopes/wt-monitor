@@ -1,0 +1,11 @@
+[package]
+name = "wt-monitor"
+version = "0.1.0"
+edition = "2021"
+description = "Local dashboard for per-worktree CPU, memory and AI-agent sessions (Linux)"
+license = "MIT"
+readme = "README.md"
+
+[profile.release]
+opt-level = 3
+lto = true

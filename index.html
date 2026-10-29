@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel de Worktrees</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --fg:#1b1f24; --mute:#6b7280; --line:#e5e7eb; --accent:#2563eb; --warn:#d97706; --hot:#dc2626; --ok:#16a34a; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0f1318; --card:#171c23; --fg:#e6e9ee; --mute:#8b94a3; --line:#262d37; --accent:#60a5fa; --warn:#f59e0b; --hot:#f87171; --ok:#4ade80; } }
+  * { box-sizing:border-box }
+  body { margin:0; padding:16px; background:var(--bg); color:var(--fg); font:14px/1.4 system-ui,sans-serif }
+  button { font:inherit; color:inherit }
+  h1 { font-size:18px; margin:0 0 4px } .sub { color:var(--mute); margin-bottom:16px; font-size:13px }
+  .head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap }
+  .controls { display:flex; gap:14px; align-items:center; flex-wrap:wrap }
+  .only { font-size:13px; color:var(--mute); cursor:pointer; user-select:none; display:flex; gap:6px; align-items:center }
+  .seg { display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden }
+  .seg button { all:unset; cursor:pointer; padding:5px 12px; font-size:13px; color:var(--mute); background:var(--card) }
+  .seg button[aria-pressed="true"] { background:var(--accent); color:#fff }
+  .seg button:focus-visible, button.pin:focus-visible, button.wt-name:focus-visible, #dclose:focus-visible { outline:2px solid var(--accent); outline-offset:2px }
+  .top { display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); margin-bottom:16px }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; position:relative }
+  .card h2 { font-size:13px; margin:0 0 10px; color:var(--mute); font-weight:600; text-transform:uppercase; letter-spacing:.04em }
+  .cores { display:grid; grid-template-columns:repeat(auto-fill,minmax(54px,1fr)); gap:6px }
+  .core { text-align:center; font-size:11px; color:var(--mute) }
+  .bar { height:36px; border-radius:4px; background:var(--line); position:relative; overflow:hidden; margin-bottom:2px }
+  .bar > i { position:absolute; left:0; right:0; bottom:0; background:var(--accent) }
+  .grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fill,minmax(360px,1fr)) }
+  .wt-head { display:flex; justify-content:space-between; align-items:baseline; gap:8px }
+  .wt-title { display:flex; gap:6px; align-items:baseline; min-width:0 }
+  button.wt-name { all:unset; cursor:pointer; font-weight:600; word-break:break-all } button.wt-name:hover { text-decoration:underline }
+  .tag { font-size:11px; padding:1px 6px; border-radius:99px; background:var(--accent); color:#fff }
+  .nums { display:flex; gap:16px; margin:8px 0; flex-wrap:wrap }
+  .num b { font-size:20px; display:block } .num span { color:var(--mute); font-size:12px }
+  .meta { color:var(--mute); font-size:12px; margin-bottom:6px }
+  svg.spark { width:100%; height:44px; display:block; margin:6px 0 }
+  svg.spark.mem polyline { stroke:var(--warn) }
+  .sparks { display:grid; grid-template-columns:1fr 1fr; gap:10px } .sparks small { color:var(--mute); font-size:11px }
+  table { width:100%; border-collapse:collapse; font-size:12px } td { padding:2px 4px; border-top:1px solid var(--line); white-space:nowrap }
+  td.cmd { max-width:170px; overflow:hidden; text-overflow:ellipsis } td.n { text-align:right; font-variant-numeric:tabular-nums }
+  .empty { color:var(--mute); padding:24px; text-align:center }
+  .memtrack { height:10px; border-radius:5px; background:var(--line); overflow:hidden; margin:6px 0 4px } .memtrack > i { display:block; height:100%; background:var(--accent) }
+  ul.alerts { list-style:none; margin:0; padding:0; font-size:12px; max-height:150px; overflow:auto }
+  ul.alerts li { padding:3px 0; border-top:1px solid var(--line) } ul.alerts li:first-child { border-top:0 }
+  ul.alerts time { color:var(--mute); margin-right:6px } ul.alerts .msg { color:var(--mute); overflow-wrap:anywhere }
+  .done { font-size:12px; margin:6px 0; padding:6px 8px; border-radius:6px; background:var(--bg); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  button.pin { all:unset; cursor:pointer; font-size:18px; line-height:1; color:var(--mute); opacity:.6; padding:0 2px }
+  button.pin:hover { opacity:1 } button.pin.on { color:var(--warn); opacity:1 }
+  .card.pinned { border-color:var(--warn) } .card.idle { opacity:.6 }
+  #grid .card, #arena .card { cursor:pointer }
+
+  /* ---- gaveta de preview ---- */
+  .drawer { position:fixed; top:0; right:0; bottom:0; width:min(560px,100vw); background:var(--card); border-left:1px solid var(--line); box-shadow:-8px 0 32px rgba(0,0,0,.25); display:flex; flex-direction:column; z-index:10 }
+  .drawer[hidden] { display:none }
+  .drawer header { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:14px 16px; border-bottom:1px solid var(--line) }
+  .drawer h2 { margin:0; font-size:16px; word-break:break-all }
+  #dclose { all:unset; cursor:pointer; font-size:24px; line-height:1; padding:2px 8px; color:var(--mute) } #dclose:hover { color:var(--fg) }
+  .dbody { overflow:auto; padding:14px 16px; display:flex; flex-direction:column; gap:14px; min-height:0 }
+  .dbody h3 { margin:0 0 6px; font-size:12px; color:var(--mute); text-transform:uppercase; letter-spacing:.04em }
+  .feed { display:flex; flex-direction:column; gap:6px }
+  .it { border-left:3px solid var(--line); padding:2px 0 2px 8px; font-size:12.5px; overflow-wrap:anywhere; white-space:pre-wrap }
+  .it .k { font-size:10.5px; font-weight:700; letter-spacing:.05em; margin-right:6px; color:var(--mute) }
+  .it.user { border-color:var(--accent) } .it.user .k { color:var(--accent) }
+  .it.text { border-color:var(--ok) } .it.text .k { color:var(--ok) }
+  .it.tool { border-color:var(--warn) } .it.tool .k { color:var(--warn) }
+  .it.result { color:var(--mute) }
+  .it time { color:var(--mute); font-size:11px; margin-left:6px }
+
+  /* ---- modo divertido ---- */
+  body.fun { --bg:#0b0d1a; --card:#14172b; --fg:#e9ecff; --mute:#9096c4; --line:#2a2f57; --accent:#7c5cff; --warn:#ffb020; --hot:#ff5470; --ok:#3ddc97;
+    background:radial-gradient(900px 500px at 10% -10%, #2a1f6b55, transparent), radial-gradient(800px 500px at 100% 0%, #0a4a6b55, transparent), var(--bg);
+    font-family:ui-rounded,"Trebuchet MS",system-ui,sans-serif }
+  body.fun h1::before { content:"🎮 " }
+  .arena { display:grid; gap:16px; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)) }
+  .arena .card { --c:hsl(var(--hue) 75% 60%); border-radius:18px; border:2px solid hsl(var(--hue) 60% 45% / .6); box-shadow:0 0 22px hsl(var(--hue) 80% 55% / .18); padding:12px 14px 14px; transition:transform .15s }
+  .arena .card:hover { transform:translateY(-3px) }
+  .arena .card.pinned { border-color:var(--warn) }
+  .arena .card[data-state="hot"] { border-color:var(--hot); box-shadow:0 0 26px #ff547066 }
+  .arena .card[data-state="done"] { border-color:var(--ok); box-shadow:0 0 28px #3ddc9755 }
+  .summary { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px }
+  .summary span { background:var(--card); border:1px solid var(--line); border-radius:99px; padding:4px 12px; font-size:13px }
+  .stage { position:relative; height:172px; display:flex; align-items:flex-end; justify-content:center; margin:6px 0 8px;
+    background:linear-gradient(transparent 70%, hsl(var(--hue) 40% 20% / .5)); border-radius:12px }
+  .bubble { position:absolute; top:4px; left:8px; right:8px; text-align:center; font-size:11.5px; background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:12px; padding:4px 8px; max-height:3.1em; overflow:hidden }
+  .bot { width:92px; height:104px; overflow:visible; --ink:var(--c) }
+  .bot .head, .bot .body, .bot .arm { fill:var(--c) } .bot .ant { fill:var(--warn) } .bot .desk { fill:hsl(var(--hue) 30% 30%) }
+  .bot .eyes circle { fill:#0b0d1a } .bot .eyes-closed path, .bot .mouth { stroke:#0b0d1a; stroke-width:3; fill:none; stroke-linecap:round }
+  .bot .visor { fill:#fff; opacity:.9 }
+  .bot .eyes-closed { display:none } [data-state="sleep"] .bot .eyes { display:none } [data-state="sleep"] .bot .eyes-closed { display:block }
+  .bot .rig, .bot .arm, .bot .eyes { transform-box:fill-box }
+  .zzz, .confetti, .sweat { position:absolute; pointer-events:none; display:none }
+  .zzz { right:14%; top:30%; font-weight:800; color:var(--mute); font-size:18px } [data-state="sleep"] .zzz { display:block; animation:zz 2.6s ease-in-out infinite }
+  .sweat { left:22%; top:34% ; font-size:18px } [data-state="hot"] .sweat { display:block; animation:drip 1s ease-in infinite }
+  .confetti { inset:0 } [data-state="done"] .confetti { display:block }
+  .confetti i { position:absolute; left:50%; bottom:30%; width:7px; height:11px; border-radius:2px; background:hsl(calc(var(--n) * 45) 90% 60%); animation:burst 1.4s ease-out infinite; animation-delay:calc(var(--n) * .08s) }
+  [data-state="work"] .rig { animation:bob var(--spd,.8s) ease-in-out infinite }
+  [data-state="work"] .arm.l { transform-origin:50% 0; animation:type var(--spd,.8s) ease-in-out infinite }
+  [data-state="work"] .arm.r { transform-origin:50% 0; animation:type var(--spd,.8s) ease-in-out infinite reverse }
+  [data-state="work"] .eyes { animation:blink 3.4s infinite; transform-origin:center }
+  [data-state="sleep"] .rig { animation:breathe 3.2s ease-in-out infinite }
+  [data-state="done"] .rig { animation:jump .7s ease-out infinite }
+  [data-state="hot"] .rig { animation:shake .25s linear infinite } [data-state="hot"] .bot .head { fill:var(--hot) }
+  [data-state="done"] .mouth { d:path("M30 47q10 12 20 0") }
+  @keyframes bob { 50% { transform:translateY(-4px) } }
+  @keyframes type { 50% { transform:rotate(18deg) } }
+  @keyframes blink { 0%,94%,100% { transform:scaleY(1) } 97% { transform:scaleY(.1) } }
+  @keyframes breathe { 50% { transform:translateY(2px) scale(1.01) } }
+  @keyframes jump { 0%,100% { transform:translateY(0) } 40% { transform:translateY(-16px) } }
+  @keyframes shake { 25% { transform:translateX(-2px) } 75% { transform:translateX(2px) } }
+  @keyframes zz { 0% { opacity:0; transform:translate(0,8px) } 40% { opacity:1 } 100% { opacity:0; transform:translate(10px,-14px) } }
+  @keyframes drip { 0% { opacity:0; transform:translateY(-6px) } 30% { opacity:1 } 100% { opacity:0; transform:translateY(14px) } }
+  @keyframes burst { 0% { opacity:1; transform:translate(0,0) rotate(0) } 100% { opacity:0; transform:translate(calc((var(--n) - 4) * 16px), -110px) rotate(260deg) } }
+  .stat { display:grid; grid-template-columns:44px 1fr 64px; align-items:center; gap:6px; font-size:11.5px; margin-top:5px; color:var(--mute) }
+  .stat .v { text-align:right; color:var(--fg); font-variant-numeric:tabular-nums }
+  .track { height:9px; border-radius:6px; background:var(--line); overflow:hidden } .track i { display:block; height:100%; width:0; border-radius:6px; transition:width .6s }
+  .track .cpu { background:linear-gradient(90deg,#3ddc97,#ffb020,#ff5470) } .track .ram { background:linear-gradient(90deg,#4cc9f0,#7c5cff) } .track .xp { background:linear-gradient(90deg,#ffb020,#ff7ad9) }
+  .chips { display:flex; gap:4px; flex-wrap:wrap; margin-top:8px; min-height:18px }
+  .chips b { font-size:10.5px; padding:1px 6px; border-radius:6px; background:var(--line); color:var(--fg) } .chips b.on { background:var(--accent) }
+
+  @media (prefers-reduced-motion: reduce) { .rig, .arm, .eyes, .zzz, .sweat, .confetti i { animation:none !important } .arena .card { transition:none } }
+</style>
+</head>
+<body>
+<div class="head">
+  <div><h1>Painel de Worktrees</h1><div class="sub" id="sub">conectando…</div></div>
+  <div class="controls">
+    <label class="only"><input type="checkbox" id="onlypin"> só fixados</label>
+    <div class="seg" role="group" aria-label="Visual">
+      <button type="button" data-mode="sober" aria-pressed="true">Sóbrio</button>
+      <button type="button" data-mode="fun" aria-pressed="false">Divertido</button>
+    </div>
+  </div>
+</div>
+
+<div class="top">
+  <div class="card"><h2>CPU por core</h2><div class="cores" id="cores"></div></div>
+  <div class="card"><h2>Sistema</h2><div class="nums" id="sys"></div><div class="memtrack"><i id="sysbar"></i></div><div class="meta" id="sysmeta"></div></div>
+  <div class="card"><h2>Agentes · tarefas concluídas</h2><ul class="alerts" id="events"></ul></div>
+  <div class="card"><h2>Alertas <span id="thr" style="text-transform:none;letter-spacing:0;font-weight:400"></span></h2><ul class="alerts" id="alerts"></ul></div>
+</div>
+
+<div class="summary" id="summary" hidden></div>
+<div class="grid" id="grid"></div>
+<div class="arena" id="arena" hidden></div>
+<div class="empty" id="empty" hidden></div>
+
+<aside class="drawer" id="drawer" role="dialog" aria-labelledby="dtitle" hidden>
+  <header><h2 id="dtitle"></h2><button type="button" id="dclose" aria-label="Fechar">×</button></header>
+  <div class="dbody">
+    <div class="meta" id="dmeta"></div>
+    <section><h3>Processos</h3><table id="dprocs"></table></section>
+    <section><h3>Atividade da sessão</h3><div class="feed" id="dfeed"></div></section>
+  </div>
+</aside>
+
+<script>
+
+/* ---------- modo demonstração (?demo): dados fictícios gerados aqui, sem servidor ---------- */
+const QS = new URLSearchParams(location.search), DEMO = QS.has('demo');
+const DEMO_T0 = Date.now(), DEMO_ROOT = '/home/dev/projects';
+const DEMO_WT = [['acme/api', 1], ['acme/web', 1], ['acme/docs', 0], ['tools/cli', 1], ['lab/ml-experiments', 1], ['acme/mobile', 1]];
+function demoData() {
+  const now = Date.now(), t = (now - DEMO_T0) / 1000, T0 = Math.floor(DEMO_T0 / 1000);
+  const cycle = T0 + Math.floor(t / 30) * 30; // a cada 30s o agente de acme/web "termina uma tarefa"
+  const groups = DEMO_WT.map(([name, claude], i) => {
+    const idle = i === 2 || i === 5;
+    const cpu = i === 4 ? 320 + 20 * Math.sin(t) : idle ? 0.5 : 40 + 120 * Math.abs(Math.sin(t / (4 + i) + i));
+    const rss = (i === 4 ? 4.4e9 : 3e8 + i * 2.2e8) + 2e7 * Math.sin(t / 3 + i);
+    const cmds = [claude ? 'claude' : 'node server.js', i === 4 ? 'python train.py --epochs 40' : 'node ./node_modules/.bin/vite', 'cargo build --release'];
+    return {
+      path: `${DEMO_ROOT}/${name}`, name, cpu, rss, threads: 18 + i * 4, nproc: 3, claude: !!claude,
+      cores_in_use: idle ? [] : [i * 2, i * 2 + 1], aff: [`${i * 2}-${i * 2 + 1}`],
+      procs: cmds.map((cmd, k) => ({ pid: 4000 + i * 10 + k, cmd, pct: idle ? 0 : cpu / (k + 1.5), rss: rss / (k + 1.2), cpu: i * 2 + (k % 2) })),
+    };
+  }).sort((a, b) => b.cpu - a.cpu);
+  return {
+    t: now / 1000, root: DEMO_ROOT, cores: Array.from({ length: 16 }, (_, c) => Math.max(2, 45 + 40 * Math.sin(t / 3 + c))),
+    mem: { total: 32e9, avail: 14e9 }, load: [3.2, 2.7, 2.1], groups,
+    cfg: { cpu_pct: 300, cpu_secs: 20, mem_bytes: 4e9, sys_pct: 90 },
+    alerts: [{ t: T0 + 3, msg: 'Memória alta: lab/ml-experiments usa 4.4 GB' }],
+    events: [
+      { t: cycle, path: `${DEMO_ROOT}/acme/web`, name: 'acme/web', session: 'a1b2c3d4', msg: 'Refatorei o formulário de checkout e adicionei testes. Tudo passando.' },
+      { t: T0 - 240, path: `${DEMO_ROOT}/acme/api`, name: 'acme/api', session: 'e5f6a7b8', msg: 'Migração aplicada e endpoints de paginação documentados.' },
+      { t: T0 - 900, path: `${DEMO_ROOT}/tools/cli`, name: 'tools/cli', session: 'c9d0e1f2', msg: 'Novo subcomando `sync` implementado.' },
+    ],
+  };
+}
+function demoPreview() {
+  const iso = m => new Date(Date.now() - m * 60000).toISOString();
+  const a = (c, m) => ({ type: 'assistant', timestamp: iso(m), message: { role: 'assistant', content: c } });
+  const lines = [
+    { type: 'user', timestamp: iso(9), message: { role: 'user', content: 'Adicione paginação na listagem de pedidos' } },
+    a([{ type: 'text', text: 'Vou olhar como a listagem é montada hoje.' }, { type: 'tool_use', name: 'Read', input: { file_path: 'src/orders/list.ts' } }], 8),
+    { type: 'user', timestamp: iso(8), message: { role: 'user', content: [{ type: 'tool_result', content: 'export async function listOrders() { return db.orders.findAll() }' }] } },
+    a([{ type: 'tool_use', name: 'Edit', input: { file_path: 'src/orders/list.ts', description: 'aceitar page e pageSize' } }], 6),
+    a([{ type: 'tool_use', name: 'Bash', input: { command: 'npm test -- orders' } }], 4),
+    { type: 'user', timestamp: iso(3), message: { role: 'user', content: [{ type: 'tool_result', content: 'Tests: 14 passed, 14 total' }] } },
+    a([{ type: 'text', text: 'Paginação implementada com `page` e `pageSize` e cobertura de testes. Os 14 testes passam.' }], 2),
+  ].map(o => JSON.stringify(o));
+  return { found: true, session: 'demo0000', mtime: Date.now() / 1000, lines };
+}
+
+const HIST = 60, hist = {}, memHist = {};
+const fmtB = b => b > 1e9 ? (b / 1e9).toFixed(1) + ' GB' : (b / 1e6).toFixed(0) + ' MB';
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const clock = t => new Date(t * 1000).toLocaleTimeString('pt-BR');
+const $ = id => document.getElementById(id);
+// Preferências ficam no navegador; a página funciona sem localStorage.
+const load = (k, d) => { if (new URLSearchParams(location.search).has('demo')) return d; try { return localStorage.getItem(k) ?? d; } catch { return d; } };
+const store = (k, v) => { if (!new URLSearchParams(location.search).has('demo')) try { localStorage.setItem(k, v); } catch {} };
+
+let data = null, mode = QS.get('mode') || load('wt-mode', 'sober'), onlyPinned = load('wt-only', '0') === '1';
+let pins = new Set(); try { pins = new Set(JSON.parse(load('wt-pins', '[]'))); } catch {}
+let xp = {}; try { xp = JSON.parse(load('wt-xp', '{}')); } catch {}
+let xpSeen = Number(load('wt-xp-seen', '-1'));
+
+const savePins = () => store('wt-pins', JSON.stringify([...pins]));
+
+/* ---------- utilidades de lista ---------- */
+function viewList(d) {
+  const have = new Set(d.groups.map(g => g.path));
+  const idle = [...pins].filter(p => !have.has(p)).map(p => ({
+    path: p, name: p.startsWith(d.root + '/') ? p.slice(d.root.length + 1) : p, idle: true,
+    cpu: 0, rss: 0, threads: 0, nproc: 0, claude: false, cores_in_use: [], aff: [], procs: [],
+  }));
+  let all = d.groups.concat(idle);
+  if (onlyPinned) all = all.filter(g => pins.has(g.path));
+  return all.sort((a, b) => pins.has(b.path) - pins.has(a.path)); // estável: mantém a ordem por CPU
+}
+
+// Reconciliação por chave: o elemento do cartão persiste, então foco e animações CSS não reiniciam a cada segundo.
+function sync(container, items, make, update) {
+  const map = container._m || (container._m = new Map()), seen = new Set();
+  items.forEach((it, i) => {
+    let el = map.get(it.path);
+    if (!el) { el = make(it); map.set(it.path, el); }
+    update(el, it);
+    seen.add(it.path);
+    if (container.children[i] !== el) container.insertBefore(el, container.children[i] || null);
+  });
+  for (const [k, el] of map) if (!seen.has(k)) { el.remove(); map.delete(k); }
+}
+
+function spark(vals, max, cls = '') {
+  const w = 300, h = 44, step = w / (HIST - 1);
+  const pts = vals.map((v, i) => `${((HIST - vals.length + i) * step).toFixed(1)},${(h - Math.min(v / max, 1) * (h - 2) - 1).toFixed(1)}`).join(' ');
+  return `<svg class="spark ${cls}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline fill="none" stroke="var(--accent)" stroke-width="1.5" points="${pts}"/></svg>`;
+}
+
+const hueOf = s => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % 360; };
+const baseName = cmd => (cmd.split(' ')[0] || '').split('/').pop();
+
+/* ---------- XP: cada tarefa concluída por um agente vale 1 ponto ---------- */
+function countEvents(d) {
+  const fresh = d.events.filter(e => e.t > xpSeen).reverse();
+  fresh.forEach(e => { xp[e.path] = (xp[e.path] || 0) + 1; });
+  if (d.events.length) xpSeen = Math.max(xpSeen, ...d.events.map(e => e.t));
+  if (fresh.length || xpSeen < 0) { store('wt-xp', JSON.stringify(xp)); store('wt-xp-seen', String(xpSeen)); }
+}
+const levelOf = n => { const L = 1 + Math.floor(Math.sqrt(n)); return { L, p: (n - (L - 1) ** 2) / (L ** 2 - (L - 1) ** 2) }; };
+
+/* ---------- cartão sóbrio ---------- */
+function makeSober(g) {
+  const el = document.createElement('div');
+  el.className = 'card'; el.dataset.path = g.path; el.dataset.name = g.name;
+  el.innerHTML = `<div class="wt-head"><span class="wt-title"><button type="button" class="wt-name"></button><span class="tag" hidden>claude</span><span class="meta idle-note" hidden>sem processos</span></span><button type="button" class="pin"></button></div><div class="body"></div>`;
+  el.querySelector('.wt-name').textContent = g.name;
+  return el;
+}
+function updateSober(el, g) {
+  setCommon(el, g);
+  const h = hist[g.path] || [], mh = memHist[g.path] || [], ev = lastDone[g.path];
+  el.querySelector('.body').innerHTML = `
+    <div class="nums">
+      <div class="num"><b>${g.cpu.toFixed(0)}%</b><span>CPU (100% = 1 core)</span></div>
+      <div class="num"><b>${fmtB(g.rss)}</b><span>memória (${(100 * g.rss / data.mem.total).toFixed(1)}% da RAM)</span></div>
+      <div class="num"><b>${g.nproc}</b><span>processos</span></div>
+      <div class="num"><b>${g.threads}</b><span>threads</span></div>
+    </div>
+    <div class="sparks">
+      <div><small>CPU · 60s</small>${spark(h, Math.max(100, ...h))}</div>
+      <div><small>Memória · 60s</small>${spark(mh, Math.max(1e8, ...mh), 'mem')}</div>
+    </div>
+    ${ev ? `<div class="done" title="${esc(ev.msg)}">✔ ${clock(ev.t)} · ${esc(ev.msg.slice(0, 140))}</div>` : ''}
+    <div class="meta">afinidade: ${esc(g.aff.join(' | ') || '—')} · cores ativos: ${g.cores_in_use.join(', ') || '—'}</div>
+    <table>${g.procs.map(p => `<tr><td class="n">${p.pid}</td><td class="cmd" title="${esc(p.cmd)}">${esc(p.cmd)}</td><td class="n">${p.pct.toFixed(0)}%</td><td class="n">${fmtB(p.rss)}</td><td class="n">c${p.cpu}</td></tr>`).join('')}</table>`;
+}
+
+/* ---------- cartão divertido ---------- */
+const ROBOT = `<svg class="bot" viewBox="0 0 80 90" aria-hidden="true"><g class="rig">
+  <line x1="40" y1="9" x2="40" y2="19" stroke="var(--ink)" stroke-width="3"/><circle class="ant" cx="40" cy="7" r="5"/>
+  <rect class="arm l" x="10" y="60" width="11" height="18" rx="5"/><rect class="arm r" x="59" y="60" width="11" height="18" rx="5"/>
+  <rect class="body" x="22" y="58" width="36" height="22" rx="8"/>
+  <rect class="head" x="14" y="18" width="52" height="38" rx="12"/><rect class="visor" x="20" y="26" width="40" height="20" rx="8"/>
+  <g class="eyes"><circle cx="31" cy="36" r="5"/><circle cx="49" cy="36" r="5"/></g>
+  <g class="eyes-closed"><path d="M26 37h10M44 37h10"/></g>
+  <path class="mouth" d="M33 48q7 4 14 0"/></g><rect class="desk" x="4" y="80" width="72" height="7" rx="3.5"/></svg>`;
+
+function makeFun(g) {
+  const el = document.createElement('div');
+  el.className = 'card'; el.dataset.path = g.path; el.dataset.name = g.name; el.dataset.state = 'sleep';
+  el.style.setProperty('--hue', hueOf(g.path));
+  el.innerHTML = `<div class="wt-head"><span class="wt-title"><button type="button" class="wt-name"></button><span class="tag" hidden>claude</span></span><button type="button" class="pin"></button></div>
+    <div class="stage"><div class="bubble"></div>${ROBOT}<div class="zzz">z Z</div><div class="sweat">💧</div>
+      <div class="confetti">${[1, 2, 3, 4, 5, 6, 7, 8].map(n => `<i style="--n:${n}"></i>`).join('')}</div></div>
+    <div class="stat"><span>⚡ CPU</span><div class="track"><i class="cpu"></i></div><span class="v cpuv"></span></div>
+    <div class="stat"><span>🧠 RAM</span><div class="track"><i class="ram"></i></div><span class="v ramv"></span></div>
+    <div class="stat"><span class="lvl"></span><div class="track"><i class="xp"></i></div><span class="v xpv"></span></div>
+    <div class="chips"></div>`;
+  el.querySelector('.wt-name').textContent = g.name;
+  return el;
+}
+function stateOf(g) {
+  const c = data.cfg, ev = lastDone[g.path];
+  if (g.rss >= c.mem_bytes || g.cpu >= c.cpu_pct) return 'hot';
+  if (ev && data.t - ev.t < 12) return 'done';
+  return g.cpu >= 5 ? 'work' : 'sleep';
+}
+function updateFun(el, g) {
+  setCommon(el, g);
+  const st = stateOf(g), top = g.procs[0], ev = lastDone[g.path], n = xp[g.path] || 0, { L, p } = levelOf(n);
+  el.dataset.state = st;
+  el.style.setProperty('--spd', Math.max(0.3, 1.2 - g.cpu / 400).toFixed(2) + 's');
+  el.querySelector('.bubble').textContent =
+    st === 'done' ? '✔ ' + (ev.msg.slice(0, 90) || 'Tarefa concluída!') :
+    st === 'hot' ? 'Tô suando aqui…' :
+    st === 'work' ? `rodando ${baseName(top.cmd) || 'algo'}…` :
+    g.idle ? 'sem processos' : 'zzz… aguardando';
+  el.querySelector('.cpu').style.width = Math.min(100, 100 * g.cpu / data.cfg.cpu_pct) + '%';
+  el.querySelector('.cpuv').textContent = g.cpu.toFixed(0) + '%';
+  el.querySelector('.ram').style.width = Math.min(100, 100 * g.rss / data.cfg.mem_bytes) + '%';
+  el.querySelector('.ramv').textContent = fmtB(g.rss);
+  el.querySelector('.lvl').textContent = '⭐ Nv ' + L;
+  el.querySelector('.xp').style.width = (p * 100).toFixed(0) + '%';
+  el.querySelector('.xpv').textContent = n + ' tarefa' + (n === 1 ? '' : 's');
+  el.querySelector('.chips').innerHTML = g.cores_in_use.map(c => `<b class="on">core ${c}</b>`).join('') || (g.idle ? '' : '<b>em repouso</b>');
+}
+
+function setCommon(el, g) {
+  const on = pins.has(g.path), pin = el.querySelector('.pin');
+  el.classList.toggle('pinned', on); el.classList.toggle('idle', !!g.idle);
+  el.querySelector('.tag').hidden = !g.claude;
+  const note = el.querySelector('.idle-note'); if (note) note.hidden = !g.idle;
+  pin.classList.toggle('on', on); pin.textContent = on ? '★' : '☆';
+  pin.setAttribute('aria-pressed', on); pin.title = on ? 'Desafixar' : 'Fixar';
+  pin.setAttribute('aria-label', (on ? 'Desafixar ' : 'Fixar ') + g.name);
+}
+
+/* ---------- render principal ---------- */
+let lastDone = {};
+function render(d) {
+  data = d;
+  const n = d.cores.length;
+  $('sub').textContent = `raiz: ${d.root} · ${d.groups.length} worktree(s) com processos · atualiza a cada 1s`;
+  $('cores').innerHTML = d.cores.map((u, i) => {
+    const used = d.groups.filter(g => g.cores_in_use.includes(i)).map(g => g.name).join(', ');
+    return `<div class="core" title="${esc(used)}"><div class="bar"><i style="height:${u}%;${u > 85 ? 'background:var(--hot)' : u > 60 ? 'background:var(--warn)' : ''}"></i></div>${i}<br>${u.toFixed(0)}%</div>`;
+  }).join('');
+  const usedMem = d.mem.total - d.mem.avail, usedPct = 100 * usedMem / d.mem.total;
+  $('sys').innerHTML =
+    `<div class="num"><b>${fmtB(usedMem)}</b><span>de ${fmtB(d.mem.total)} (${usedPct.toFixed(0)}%)</span></div>` +
+    `<div class="num"><b>${d.load.map(x => x.toFixed(2)).join(' ')}</b><span>load 1/5/15 · ${n} cpus</span></div>`;
+  const bar = $('sysbar');
+  bar.style.width = usedPct + '%';
+  bar.style.background = usedPct >= d.cfg.sys_pct ? 'var(--hot)' : usedPct >= d.cfg.sys_pct - 15 ? 'var(--warn)' : 'var(--accent)';
+  $('sysmeta').textContent = `livre: ${fmtB(d.mem.avail)} · worktrees somam ${fmtB(d.groups.reduce((a, g) => a + g.rss, 0))}`;
+  $('thr').textContent = `· CPU ≥ ${d.cfg.cpu_pct}% por ${d.cfg.cpu_secs}s · mem ≥ ${(d.cfg.mem_bytes / 1e9).toFixed(1)} GB · sistema ≥ ${d.cfg.sys_pct}%`;
+  $('alerts').innerHTML = d.alerts.length
+    ? d.alerts.map(a => `<li><time>${clock(a.t)}</time>${esc(a.msg)}</li>`).join('')
+    : '<li style="color:var(--mute)">nenhum alerta disparado</li>';
+  $('events').innerHTML = d.events.length
+    ? d.events.map(e => `<li><time>${clock(e.t)}</time><b>${esc(e.name)}</b>${e.session ? ` <span class="meta">#${esc(e.session)}</span>` : ''}<div class="msg">${esc(e.msg.slice(0, 220) || 'Tarefa concluída')}</div></li>`).join('')
+    : '<li style="color:var(--mute)">aguardando a conclusão de uma tarefa…</li>';
+
+  lastDone = {};
+  d.events.forEach(e => { if (!(e.path in lastDone)) lastDone[e.path] = e; });
+  countEvents(d);
+  d.groups.forEach(g => {
+    hist[g.path] = (hist[g.path] || []).concat(g.cpu).slice(-HIST);
+    memHist[g.path] = (memHist[g.path] || []).concat(g.rss).slice(-HIST);
+  });
+
+  const list = viewList(d), fun = mode === 'fun';
+  $('grid').hidden = fun; $('arena').hidden = !fun; $('summary').hidden = !fun;
+  $('empty').hidden = list.length > 0;
+  $('empty').textContent = onlyPinned ? 'Nenhum worktree fixado. Clique na ☆ de um cartão para fixar.' : 'Nenhum processo encontrado em worktrees sob a raiz.';
+  if (fun) {
+    sync($('arena'), list, makeFun, updateFun);
+    const st = list.map(stateOf), cnt = s => st.filter(x => x === s).length;
+    $('summary').innerHTML = `<span>🛠️ ${cnt('work')} trabalhando</span><span>😴 ${cnt('sleep')} dormindo</span><span>🎉 ${cnt('done')} acabaram de terminar</span><span>🔥 ${cnt('hot')} no limite</span><span>🏆 ${Object.values(xp).reduce((a, b) => a + b, 0)} tarefas no total</span>`;
+  } else {
+    sync($('grid'), list, makeSober, updateSober);
+  }
+  refreshDrawerStatic();
+}
+
+/* ---------- gaveta de preview ---------- */
+let drawerPath = null, drawerOpener = null;
+function openDrawer(path, name, opener) {
+  drawerPath = path; drawerOpener = opener;
+  $('dtitle').textContent = name; $('dfeed').textContent = 'carregando…';
+  $('drawer').hidden = false; $('dclose').focus();
+  refreshDrawerStatic(); refreshFeed(true);
+}
+function closeDrawer() {
+  drawerPath = null; $('drawer').hidden = true;
+  if (drawerOpener && document.contains(drawerOpener)) drawerOpener.focus();
+}
+function refreshDrawerStatic() {
+  if (!drawerPath || !data) return;
+  const g = data.groups.find(x => x.path === drawerPath);
+  $('dmeta').textContent = g ? `${g.nproc} processos · ${g.threads} threads · CPU ${g.cpu.toFixed(0)}% · ${fmtB(g.rss)} · afinidade ${g.aff.join(' | ') || '—'}` : 'nenhum processo ativo neste worktree';
+  $('dprocs').innerHTML = g ? g.procs.map(p => `<tr><td class="n">${p.pid}</td><td class="cmd" style="max-width:260px" title="${esc(p.cmd)}">${esc(p.cmd)}</td><td class="n">${p.pct.toFixed(0)}%</td><td class="n">${fmtB(p.rss)}</td></tr>`).join('') : '';
+}
+const brief = (v, n) => { v = typeof v === 'string' ? v : JSON.stringify(v ?? ''); return v.length > n ? v.slice(0, n) + '…' : v; };
+function summarize(i) {
+  if (!i || typeof i !== 'object') return brief(i, 120);
+  for (const k of ['command', 'file_path', 'pattern', 'path', 'url', 'description', 'prompt', 'query']) if (i[k]) return brief(i[k], 140);
+  return brief(Object.values(i).find(v => typeof v === 'string') ?? i, 120);
+}
+function feedItems(lines) {
+  const out = [];
+  for (const l of lines) {
+    let e; try { e = JSON.parse(l); } catch { continue; }
+    const m = e.message; if (!m) continue;
+    const who = m.role === 'user' ? 'user' : 'text', c = m.content;
+    if (typeof c === 'string') { if (c.trim()) out.push({ k: who, s: brief(c.trim(), 500), t: e.timestamp }); continue; }
+    if (!Array.isArray(c)) continue;
+    for (const b of c) {
+      if (b.type === 'text' && b.text?.trim()) out.push({ k: who, s: brief(b.text.trim(), 600), t: e.timestamp });
+      else if (b.type === 'tool_use') out.push({ k: 'tool', s: `${b.name}  ${summarize(b.input)}`, t: e.timestamp });
+      else if (b.type === 'tool_result') {
+        const r = typeof b.content === 'string' ? b.content : Array.isArray(b.content) ? b.content.map(x => x.text || '').join(' ') : '';
+        out.push({ k: 'result', s: brief(r.trim(), 200), t: e.timestamp });
+      }
+    }
+  }
+  return out.slice(-40);
+}
+const LABEL = { user: 'VOCÊ', text: 'AGENTE', tool: 'FERRAMENTA', result: 'RESULTADO' };
+async function refreshFeed(first) {
+  if (!drawerPath) return;
+  const path = drawerPath, feed = $('dfeed');
+  try {
+    const r = DEMO ? demoPreview() : await (await fetch('/api/preview?path=' + encodeURIComponent(path))).json();
+    if (path !== drawerPath) return;
+    if (!r.found) { feed.textContent = 'Nenhuma transcrição do Claude encontrada para este worktree.'; return; }
+    const body = feed.closest('.dbody'), atEnd = first || body.scrollHeight - body.scrollTop - body.clientHeight < 40;
+    feed.innerHTML = feedItems(r.lines).map(i => `<div class="it ${i.k}"><span class="k">${LABEL[i.k]}</span>${esc(i.s)}${i.t ? `<time>${new Date(i.t).toLocaleTimeString('pt-BR')}</time>` : ''}</div>`).join('') || 'Sessão sem atividade recente.';
+    $('dmeta').dataset.session = r.session;
+    if (atEnd) body.scrollTop = body.scrollHeight;
+  } catch { feed.textContent = 'sem conexão com o servidor'; }
+}
+
+/* ---------- eventos ---------- */
+function setMode(m) {
+  mode = m; store('wt-mode', m);
+  document.body.classList.toggle('fun', m === 'fun');
+  document.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === m));
+  if (data) render(data);
+}
+document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+$('onlypin').checked = onlyPinned;
+$('onlypin').addEventListener('change', e => { onlyPinned = e.target.checked; store('wt-only', onlyPinned ? '1' : '0'); if (data) render(data); });
+for (const id of ['grid', 'arena']) $(id).addEventListener('click', e => {
+  const card = e.target.closest('.card'); if (!card) return;
+  if (e.target.closest('.pin')) {
+    const p = card.dataset.path;
+    pins.has(p) ? pins.delete(p) : pins.add(p);
+    savePins(); render(data); return;
+  }
+  openDrawer(card.dataset.path, card.dataset.name, card.querySelector('.wt-name'));
+});
+$('dclose').addEventListener('click', closeDrawer);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && drawerPath) closeDrawer(); });
+
+async function tick() {
+  try {
+    const d = DEMO ? demoData() : await (await fetch('/api')).json();
+    if (d.groups) {
+      render(d);
+      const o = QS.get('open'); // ?open=acme/api abre a gaveta de preview (útil nas capturas de tela)
+      if (o && !tick.opened) { tick.opened = true; const c = document.querySelector(`.card[data-name="${o}"]`); if (c) openDrawer(c.dataset.path, o, null); }
+    }
+  } catch { $('sub').textContent = 'sem conexão com o servidor'; }
+}
+setMode(mode);
+tick(); setInterval(tick, 1000); setInterval(() => refreshFeed(false), 2000);
+</script>
+</body>
+</html>
