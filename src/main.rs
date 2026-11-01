@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+mod editor;
 mod pty;
 mod sched;
 mod terms;
@@ -936,6 +937,9 @@ fn serve(mut s: TcpStream, ctx: &Ctx) {
     }
     if route.starts_with("/api/control") {
         return sched::route(s, ctx, method, route, &hdr, &body);
+    }
+    if route == "/api/open" {
+        return editor::route(s, ctx, method, &hdr, &body);
     }
     if route.starts_with("/api/terminals") || route.starts_with("/ws/term/") {
         return terms::route(s, ctx, method, route, &hdr, &body);

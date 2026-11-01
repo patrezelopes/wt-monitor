@@ -14,6 +14,8 @@ wt-monitor is a local tool for a single user's machine.
 - The preview reads Claude Code transcripts only for worktrees inside the watched root; paths are validated (absolute, no `..`, symlinks resolved, must contain `.git`).
 - The dashboard reads `/proc` and shows processes, commands and transcript excerpts to **anyone who can reach the port**. On a machine shared with other users, other local users can see them: `127.0.0.1` is not private between users.
 
+**Open in editor:** `POST /api/open` starts the editor installed on your machine on a worktree. It needs the same token and `X-WT: 1` header as the terminals, and is unavailable when neither terminals nor control is enabled (no token exists). The command comes only from `WT_EDITOR` or a fixed list, never from the request; the path must be a valid worktree inside the root and is passed as one argument, with no shell involved.
+
 **Terminals (opt-in with `--terminals`):** the dashboard can start a login shell (or run `claude` in one) in a worktree. That is remote-code-execution capability for whoever is authorised, so:
 - It is **off by default**; every `/api/terminals*` and `/ws/term/*` route answers 404 unless started with `--terminals` (or `WT_TERMINALS=1`).
 - Authorisation is a 256-bit secret kept in a file that only you can read (`~/.config/wt-monitor/token`, mode `0600`, directory `0700`). It is **never returned by any API** — you receive it once through the fragment of a link (`/#token=…`, which browsers never send to the server) printed by `wt-monitor --print-token` / `make open-terminals`. Other local users, who can reach the port, cannot obtain it.

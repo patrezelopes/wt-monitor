@@ -27,6 +27,8 @@ Single static binary, **zero dependencies** (Rust standard library only), Linux 
 - **Terminals (opt-in)** – open real terminals — a login shell, or `claude` — inside the dashboard, grouped by worktree and shown 1, 2 or 4 at a time. Only terminals **started by the panel** are managed. See [Terminals](#terminals-opt-in).
 - **CPU contention** – each worktree shows how long it spent *waiting for a core* (queue %), next to the system's CPU pressure (PSI), with an alert when a worktree is starved. See [Prioritising work](#prioritising-work-cpu-and-memory).
 - **Prioritise work (opt-in)** – give a worktree high or low CPU priority, put one in **Focus**, and cap or protect its memory, all reversible, so a priority task is not slowed down by the others. Nothing is ever killed. Uses cgroup v2; see below.
+- **Open in your editor** – the session drawer has an *Open in code* button that opens the worktree in the editor installed on your machine (VS Code, Cursor, VSCodium, Windsurf or Zed; or whatever `WT_EDITOR` says). Same token as the terminals, so it needs `--terminals` or `--control` (on by default with `make install`).
+- **Resume a session** – the session drawer has a *Resume session* button that opens a new terminal and runs `claude --resume` on the worktree's most recent conversation, even after Claude has exited. Needs terminals enabled.
 - **Filters, search and pins** – filter by status, search by worktree, branch, agent or skill (`Ctrl K`), and ★ pin the worktrees you care about; they stay on top even with no running processes.
 - **Desktop notifications** (via `notify-send`) for high CPU / memory in a worktree, high system memory, and **when an agent finishes a task**, including its last message.
 - **Per-core CPU bars**, system memory and load.
@@ -95,6 +97,7 @@ Command line: `wt-monitor [root=~/dev] [port=8765] [--terminals] [--control]` (o
 | `WT_WAIT_SECS` | `15` | Seconds above that threshold before alerting |
 | `WT_TERMINALS` | _(off)_ | `1` enables terminals, same as `--terminals` |
 | `WT_CONTROL` | _(off)_ | `1` enables priority control, same as `--control` |
+| `WT_EDITOR` | first of `code`, `cursor`, `codium`, `windsurf`, `zed` found | Editor command for the drawer's *Open in…* button, e.g. `cursor` or `code --new-window` |
 | `WT_TOKEN_FILE` | `$XDG_CONFIG_HOME/wt-monitor/token`, else `~/.config/wt-monitor/token` | Where the terminals' token is kept (mode `0600`) |
 
 Each alert fires once, re-arms when the value returns to normal, and waits at least 2 minutes before repeating. The hook honours `WT_PORT` if you changed the port.
@@ -114,7 +117,7 @@ make open-terminals           # opens the dashboard with the one-time token in t
 
 A random 256-bit secret is created on first use in `~/.config/wt-monitor/token` (mode `0600`) and is never returned by the API. `make open-terminals` opens `http://127.0.0.1:8765/#token=…` once; the browser remembers the token (the fragment is never sent to the server) and the link is cleaned from the address bar. Without the token the *Terminals* tab explains how to get it and its buttons stay disabled.
 
-- **Tab "Terminais"**: pick a worktree and click *Novo terminal* (a login shell in that worktree, so your `PATH`, `nvm` and per-folder account switching apply; it falls back to `/bin/bash` when `$SHELL` is not set, as in systemd user services) or *Novo Claude* (the same shell, with `claude` already typed). The session drawer has the same two buttons.
+- **Tab "Terminais"**: pick a worktree and click *Novo terminal* (a login shell in that worktree, so your `PATH`, `nvm` and per-folder account switching apply; it falls back to `/bin/bash` when `$SHELL` is not set, as in systemd user services) or *Novo Claude* (the same shell, with `claude` already typed). The session drawer has the same two buttons, plus *Resume session*, which runs `claude --resume <id>` on the worktree's latest transcript.
 - **Sets**: terminals are grouped by worktree in tabs; the `1 / 2 / 4` switch shows that many side by side. Closing a tab kills the terminal's process group.
 - **Reconnect**: terminals live in the server, not in the page. Reload or reopen the browser and they come back with the last 256 KB of output; ended terminals stay listed for 10 minutes with their exit code. At most 16 run at once.
 - Only terminals **started by the panel** are managed; it never attaches to terminals you opened elsewhere.

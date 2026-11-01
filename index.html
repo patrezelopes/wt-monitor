@@ -253,8 +253,10 @@
 <aside class="drawer" id="drawer" role="dialog" aria-labelledby="dtitle" hidden>
   <div class="dh">
     <div class="t"><h2 id="dtitle"></h2><span class="tag mono" id="dbranch"></span><span id="dstatus"></span><span style="flex:1"></span>
+      <button type="button" class="chip" id="deditor" hidden>Editor</button>
       <button type="button" class="chip" id="dterm" hidden>Terminal</button>
       <button type="button" class="chip" id="dclaude" hidden>Claude</button>
+      <button type="button" class="chip" id="dresume" hidden title="Abre um terminal e retoma a última sessão do Claude neste worktree">Retomar sessão</button>
       <button type="button" class="iconbtn" id="dpin"></button>
       <button type="button" class="iconbtn" id="dclose" aria-label="Fechar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <p class="dsub" id="dsub"></p>
@@ -786,8 +788,11 @@ function procsTab(r) {
 }
 function renderDrawer() {
   if (!drawerPath || !data) return;
+  $('deditor').hidden = !(EDITOR.name && EDITOR.authed);
+  if (!$('deditor').disabled) $('deditor').textContent = EDITOR.name ? `Abrir no ${EDITOR.name}` : 'Editor';
   $('dterm').hidden = $('dclaude').hidden = !(TERM.enabled && TERM.authed);
   const r = rowsFor(data).find(x => x.g.path === drawerPath); if (!r) return;
+  $('dresume').hidden = $('dclaude').hidden || !(r.a && r.a.found); // há transcrição, mesmo com o claude já encerrado
   const g = r.g;
   $('dtitle').textContent = g.name; $('dbranch').textContent = g.branch; $('dbranch').hidden = !g.branch;
   setHTML($('dstatus'), badge(r.st)); setPin($('dpin'), r.pinned, g.name);
@@ -873,7 +878,28 @@ $('dbody').addEventListener('click', e => {
   if ('focus' in b.dataset) return ctlPost('/api/control/focus', `path=${encodeURIComponent(b.dataset.focus)}`);
   for (const k of ['cpu', 'high', 'low']) if (k in b.dataset) return ctlPost('/api/control', `${path}&${k}=${b.dataset[k]}`);
 });
-addEventListener('hashchange', () => { if (!DEMO) setTimeout(ctlProbe, 50); });
+addEventListener('hashchange', () => { if (!DEMO) setTimeout(ctlProbe, 50); setTimeout(editorProbe, 50); });
+
+/* ---------- abrir no editor instalado (VS Code etc.; usa o mesmo token dos terminais) ---------- */
+const EDITOR = { name: '', authed: false };
+async function editorProbe() {
+  if (DEMO) { EDITOR.name = 'code'; EDITOR.authed = true; return; }
+  try {
+    const r = await fetch('/api/open', { headers: ctlHeaders() }), j = await r.json();
+    EDITOR.name = j.enabled ? j.editor : ''; EDITOR.authed = !!j.auth;
+  } catch { /* tenta de novo no próximo ciclo */ }
+  if (data) renderDrawer();
+}
+$('deditor').addEventListener('click', async () => {
+  if (!drawerPath || DEMO) return;
+  const b = $('deditor'), t = b.textContent; b.disabled = true;
+  try {
+    const r = await fetch('/api/open', { method: 'POST', headers: ctlHeaders(), body: `path=${encodeURIComponent(drawerPath)}` });
+    b.textContent = r.ok ? 'Aberto ✓' : r.status === 503 ? 'Editor não encontrado' : 'Falhou';
+    if (r.status === 403) { EDITOR.authed = false; }
+  } catch { b.textContent = 'Falhou'; }
+  setTimeout(() => { b.disabled = false; b.textContent = t; if (data) renderDrawer(); }, 1800);
+});
 
 /* ---------- terminais (opt-in: wt-monitor --terminals) ---------- */
 const TERM = { enabled: false, authed: false, token: '', metas: [], panes: new Map(), active: null, layout: Number(QS.get('layout')) || Number(load('wt-tlayout', '1')) || 1, demoId: 0 };
@@ -908,7 +934,7 @@ function updateTermAvailability() {
   const usable = TERM.enabled && TERM.authed;
   $('segterm').hidden = !TERM.enabled;
   $('tnew-shell').disabled = $('tnew-claude').disabled = !usable;
-  $('dterm').hidden = $('dclaude').hidden = !usable;
+  $('dterm').hidden = $('dclaude').hidden = $('dresume').hidden = !usable;
   if (TERM.enabled && !TERM.authed) termNote(AUTH_NOTE); else if ($('tnote').textContent === AUTH_NOTE) termNote('');
 }
 const termHeaders = () => ({ 'X-WT': '1', 'X-WT-Token': TERM.token, 'Content-Type': 'text/plain' });
@@ -925,7 +951,7 @@ async function newTerminal(path, kind) {
   if (!TERM.enabled || !TERM.authed) return;
   if (DEMO) {
     const g = (data ? data.groups : []).find(x => x.path === path);
-    const meta = { id: ++TERM.demoId, path, name: g ? g.name : path.split('/').slice(-2).join('/'), kind, alive: true };
+    const meta = { id: ++TERM.demoId, path, name: g ? g.name : path.split('/').slice(-2).join('/'), kind: kind === 'resume' ? 'claude' : kind, alive: true };
     TERM.metas.push(meta); termReconcile(); termActivate(meta.id); return meta.id;
   }
   const r = await fetch('/api/terminals', { method: 'POST', headers: termHeaders(), body: `path=${encodeURIComponent(path)}&kind=${kind}&cols=100&rows=30` });
@@ -1066,6 +1092,7 @@ $('dpin').addEventListener('click', () => togglePin(drawerPath));
 async function openTermFromDrawer(kind) { const path = drawerPath; closeDrawer(); setMode('term'); await newTerminal(path, kind); }
 $('dterm').addEventListener('click', () => openTermFromDrawer('shell'));
 $('dclaude').addEventListener('click', () => openTermFromDrawer('claude'));
+$('dresume').addEventListener('click', () => openTermFromDrawer('resume'));
 $('tnew-shell').addEventListener('click', () => { const p = $('twt').value; if (p) newTerminal(p, 'shell'); });
 $('tnew-claude').addEventListener('click', () => { const p = $('twt').value; if (p) newTerminal(p, 'claude'); });
 $('tlayout').addEventListener('click', e => { const b = e.target.closest('[data-layout]'); if (b) { TERM.layout = Number(b.dataset.layout); store('wt-tlayout', String(TERM.layout)); renderTerms(); } });
@@ -1092,7 +1119,7 @@ async function tick() {
 }
 (async () => {
   await termInit();
-  await ctlProbe();
+  await ctlProbe(); await editorProbe();
   if (mode === 'term' && !TERM.enabled) mode = 'sober';
   updateTermAvailability();
   setMode(mode);

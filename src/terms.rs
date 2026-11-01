@@ -1,7 +1,7 @@
 //! Terminais iniciados pelo próprio painel (opt-in com `--terminals`): PTY + WebSocket.
 //! O painel é dono de cada processo; nada se conecta a terminais de fora. Veja docs/architecture.md.
 
-use crate::{esc, pct_decode, pty, qparam, respond, ws, Ctx};
+use crate::{esc, latest_transcript, pct_decode, pty, qparam, respond, ws, Ctx};
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
@@ -209,6 +209,7 @@ impl Terms {
         name: &str,
         kind: &'static str,
         size: (u16, u16),
+        resume: Option<&str>,
         on_spawn: &dyn Fn(u32),
     ) -> Result<Arc<Term>, String> {
         let (cols, rows) = size;
@@ -236,7 +237,12 @@ impl Terms {
             .map_err(|e| format!("não foi possível iniciar o terminal: {e}"))?;
         on_spawn(p.child.id());
         if kind == "claude" {
-            let _ = p.master.write_all(b"claude\n"); // fica no shell quando o claude termina
+            // fica no shell quando o claude termina; o id da sessão já foi validado (só [0-9a-f-])
+            let cmd = match resume {
+                Some(id) => format!("claude --resume {id}\n"),
+                None => "claude\n".to_string(),
+            };
+            let _ = p.master.write_all(cmd.as_bytes());
         }
         let reader = p.master.try_clone().map_err(|e| e.to_string())?;
         let id = self.next.fetch_add(1, Ordering::SeqCst);
@@ -349,13 +355,13 @@ pub fn route(
             let raw = qparam(body, "path").map(pct_decode).unwrap_or_default();
             let kind = match qparam(body, "kind") {
                 None | Some("shell") => "shell",
-                Some("claude") => "claude",
+                Some("claude" | "resume") => "claude",
                 Some(_) => {
                     return respond(
                         &mut s,
                         "400 Bad Request",
                         "text/plain",
-                        "kind must be shell or claude",
+                        "kind must be shell, claude or resume",
                     )
                 }
             };
@@ -379,7 +385,27 @@ pub fn route(
                 .to_string_lossy()
                 .into_owned();
             let size = (num("cols", 80, 500), num("rows", 24, 300));
-            match terms.create(&wt, &name, kind, size, &|pid| {
+            // "resume": retoma a conversa mais recente do worktree (o id vem do nome da transcrição, nunca do cliente)
+            let resume =
+                if qparam(body, "kind") == Some("resume") {
+                    let id = latest_transcript(&wt)
+                        .and_then(|(f, _)| f.file_stem().map(|x| x.to_string_lossy().into_owned()))
+                        .filter(|id| {
+                            !id.is_empty() && id.bytes().all(|c| c.is_ascii_hexdigit() || c == b'-')
+                        });
+                    match id {
+                        Some(id) => Some(id),
+                        None => return respond(
+                            &mut s,
+                            "404 Not Found",
+                            "application/json",
+                            "{\"error\":\"nenhuma sessão do Claude encontrada neste worktree\"}",
+                        ),
+                    }
+                } else {
+                    None
+                };
+            match terms.create(&wt, &name, kind, size, resume.as_deref(), &|pid| {
                 ctx.control.on_spawn(&wt, pid)
             }) {
                 Ok(t) => respond(
