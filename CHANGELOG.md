@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-01
+
 ### Added
 - **Resume a session in a new terminal.** A *Resume session* button in the session drawer opens a terminal and runs `claude --resume <id>` with the most recent conversation of that worktree, even if Claude has already exited. `POST /api/terminals` accepts `kind=resume`; the session id is read from the transcript file name on the server (never from the request) and checked to be hex and dashes only.
 - **Open a worktree in your editor.** An *Open in code* button in the session drawer launches VS Code (or Cursor, VSCodium, Windsurf, Zed, or `WT_EDITOR`) on the worktree. `GET/POST /api/open`, guarded by the same token as the terminals; the command never comes from the request.
@@ -73,7 +75,8 @@ All notable changes to this project are documented here. The format follows
 ### Added
 - Initial release: per-worktree CPU, memory, threads and CPU affinity from `/proc`; alerts with desktop notifications; Claude Code `Stop` hook for "task finished" events; session preview; pins; playful view; systemd user service.
 
-[Unreleased]: https://github.com/patrezelopes/wt-monitor/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/patrezelopes/wt-monitor/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/patrezelopes/wt-monitor/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/patrezelopes/wt-monitor/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/patrezelopes/wt-monitor/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/patrezelopes/wt-monitor/compare/v0.1.0...v0.2.0
