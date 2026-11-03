@@ -239,7 +239,7 @@
     <div class="tnote" id="tnote" hidden></div>
     <div class="ttabs" id="ttabs" role="tablist" aria-label="Terminais"></div>
     <div class="tgrid" id="tgrid" data-layout="1"></div>
-    <div class="empty" id="tempty">Nenhum terminal aberto. Escolha um worktree e clique em “Novo terminal”.</div>
+    <div class="empty" id="tempty">Nenhum terminal aberto. Escolha a raiz ou um worktree e clique em “Novo terminal” ou “Novo Claude”.</div>
   </div>
 
   <div id="arena" hidden>
@@ -1067,7 +1067,7 @@ function termActivate(id) { TERM.active = id; renderTerms(); const p = TERM.pane
 function renderTermHeader(d) {
   const sel = $('twt'), cur = sel.value, names = new Map(d.groups.map(g => [g.path, g.name]));
   pins.forEach(p => { if (!names.has(p)) names.set(p, p.startsWith(d.root + '/') ? p.slice(d.root.length + 1) : p); });
-  const html = [...names].map(([path, name]) => `<option value="${esc(path)}">${esc(name)}</option>`).join('');
+  const html = `<option value="${esc(d.root)}">(raiz) ${esc(d.root.split('/').pop() || d.root)}</option>` + [...names].map(([path, name]) => `<option value="${esc(path)}">${esc(name)}</option>`).join('');
   if (sel._h !== html) { sel.innerHTML = html; sel._h = html; if (cur && names.has(cur)) sel.value = cur; else if (drawerPath && names.has(drawerPath)) sel.value = drawerPath; }
 }
 

@@ -365,12 +365,12 @@ pub fn route(
                     )
                 }
             };
-            let Some(wt) = ctx.worktree(&raw) else {
+            let Some(wt) = ctx.term_dir(&raw) else {
                 return respond(
                     &mut s,
                     "400 Bad Request",
                     "text/plain",
-                    "path is not a worktree inside the watched root",
+                    "path is not the watched root or a worktree inside it",
                 );
             };
             let num = |k: &str, d: u16, hi: u16| {
@@ -379,11 +379,13 @@ pub fn route(
                     .unwrap_or(d)
                     .clamp(1, hi)
             };
-            let name = wt
-                .strip_prefix(&ctx.root)
-                .unwrap_or(&wt)
-                .to_string_lossy()
-                .into_owned();
+            let name = match wt.strip_prefix(&ctx.root) {
+                Ok(r) if !r.as_os_str().is_empty() => r.to_string_lossy().into_owned(),
+                _ => format!(
+                    "(raiz) {}",
+                    wt.file_name().map_or(String::new(), |n| n.to_string_lossy().into_owned())
+                ),
+            };
             let size = (num("cols", 80, 500), num("rows", 24, 300));
             // "resume": retoma a conversa mais recente do worktree (o id vem do nome da transcrição, nunca do cliente)
             let resume =
@@ -406,7 +408,9 @@ pub fn route(
                     None
                 };
             match terms.create(&wt, &name, kind, size, resume.as_deref(), &|pid| {
-                ctx.control.on_spawn(&wt, pid)
+                if wt != ctx.root {
+                    ctx.control.on_spawn(&wt, pid)
+                }
             }) {
                 Ok(t) => respond(
                     &mut s,

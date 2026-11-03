@@ -617,6 +617,15 @@ impl Ctx {
         let wt = fs::canonicalize(&p).ok()?;
         (wt.starts_with(&self.root) && wt.join(".git").exists()).then_some(wt)
     }
+
+    /// Onde um terminal pode abrir: um worktree ou a própria raiz observada (para quem não tem worktree ativo).
+    fn term_dir(&self, raw: &str) -> Option<PathBuf> {
+        let p = PathBuf::from(raw);
+        if p.is_absolute() && fs::canonicalize(&p).ok().as_deref() == Some(self.root.as_path()) {
+            return Some(self.root.clone());
+        }
+        self.worktree(raw)
+    }
 }
 
 fn find(h: &[u8], n: &[u8]) -> Option<usize> {

@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Terminals without an active worktree.** The Terminals tab always offers the watched root (`(raiz) name`) as a destination, so you can open a shell or Claude there before any worktree exists. `POST /api/terminals` accepts the root as `path`; anything else outside a worktree is still refused. Terminals in the root are not placed in a worktree cgroup.
+
 ## [0.4.0] - 2026-11-01
 
 ### Added
