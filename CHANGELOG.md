@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Answered questions stop counting as pending right away.** The agent hook now also runs on `PostToolUse` for `AskUserQuestion` and sends a `kind: answered` event, so `/api/attention` (and "quem precisa de mim" on Alexa) drops the question as soon as you answer it instead of at the end of the agent's turn. Run `make hooks` again to add the entry.
+
 ## [0.5.0] - 2026-11-12
 
 ### Added

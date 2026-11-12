@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install or remove the wt-monitor hooks (Stop, Notification, PreToolUse) in Claude Code config dirs.
+"""Install or remove the wt-monitor hooks (Stop, Notification, PreToolUse, PostToolUse) in Claude Code config dirs.
 
 Usage: install-hooks.py [--uninstall] [config-dir ...]
 Without directories it targets ~/.claude and every ~/.claude-*. Idempotent; every
@@ -18,11 +18,12 @@ explicit = [os.path.expanduser(a) for a in argv if a != "--uninstall"]
 dirs = explicit or [os.path.join(home, ".claude")] + sorted(glob.glob(os.path.join(home, ".claude-*")))
 
 
-# Evento → matcher (None = sem matcher). O mesmo script trata os três pelo hook_event_name.
+# Evento → matcher (None = sem matcher). O mesmo script trata todos pelo hook_event_name.
 EVENTS = {
     "Stop": None,
     "Notification": "permission_prompt|elicitation_dialog",
     "PreToolUse": "AskUserQuestion",
+    "PostToolUse": "AskUserQuestion",
 }
 
 

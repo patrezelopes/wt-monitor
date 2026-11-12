@@ -804,7 +804,8 @@ fn handle_event(ctx: &Ctx, body: &str) {
     };
     let (cwd, session) = (field("cwd:"), field("session:"));
     // `kind: ask` = o agente está parado esperando você (pergunta ou permissão); o padrão é tarefa concluída.
-    let ask = field("kind:") == "ask";
+    let kind = field("kind:");
+    let ask = kind == "ask";
     let (path, name) = match worktree_of(Path::new(&cwd), &ctx.root, &mut HashMap::new()) {
         Some(p) => {
             let n = p
@@ -841,6 +842,10 @@ fn handle_event(ctx: &Ctx, body: &str) {
         );
     } else {
         ctx.pending.lock().unwrap().remove(&key);
+    }
+    // `kind: answered` = você respondeu a pergunta: só tira a pendência, sem notificar.
+    if kind == "answered" {
+        return;
     }
     if ask {
         let title = format!("❓ {name} precisa de você");
