@@ -28,9 +28,11 @@ actions:
   - action: notify.alexa_media
     data:
       target: media_player.echo_show
+      title: wt-monitor
       message: "{{ fala }}"
       data:
         type: announce
+        method: all  # all = voz + tela; speak = só voz; show = só na tela do Echo Show, sem voz
   # Opcional: também manda para o celular, com a última mensagem do agente.
   # - action: notify.mobile_app_seu_celular
   #   data:

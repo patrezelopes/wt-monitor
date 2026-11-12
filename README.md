@@ -108,7 +108,7 @@ Each alert fires once, re-arms when the value returns to normal, and waits at le
 
 wt-monitor makes no network requests by itself. If you want notifications somewhere else (Home Assistant, an Alexa announcement, your phone), set `WT_NOTIFY_CMD`: it is run with `sh -c` next to every desktop notification, with `WT_EVENT` (`done`, `cpu`, `wait`, `mem`, `sysmem`), `WT_WORKTREE`, `WT_TITLE`, `WT_BODY` (plain text), `WT_URGENT` (`0`/`1`) and `WT_NOTIFY_JSON` (all of it as one JSON object) in its environment. It runs in the background and is killed after 10 s; failures go to the service log. The command only ever comes from the environment.
 
-For Home Assistant, [`contrib/home-assistant`](contrib/home-assistant) has a script that POSTs the JSON to a webhook and an automation that announces it on an Echo through [Alexa Media Player](https://github.com/alandtse/alexa_media_player):
+For Home Assistant, [`contrib/home-assistant`](contrib/home-assistant) has a [step-by-step guide](contrib/home-assistant/README.md), a script that POSTs the JSON to a webhook and an automation that announces it on an Echo through [Alexa Media Player](https://github.com/alandtse/alexa_media_player):
 
 ```bash
 install -m755 contrib/home-assistant/wt-notify-ha.sh ~/.local/bin/
