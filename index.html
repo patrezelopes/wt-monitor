@@ -999,7 +999,8 @@ function createPane(meta) {
   DEMO ? demoConnect(pane) : connectPane(pane);
 }
 function fitPane(pane) {
-  if (pane.el.hidden || !pane.el.offsetParent) return;
+  // O painel pode ter sido fechado entre o render e o requestAnimationFrame.
+  if (!pane || pane.el.hidden || !pane.el.offsetParent) return;
   try { pane.fit.fit(); } catch { /* contêiner ainda sem tamanho */ }
 }
 function connectPane(pane) {
