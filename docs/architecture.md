@@ -26,7 +26,7 @@ Per worktree, the sampler turns the deltas of run and wait time into **queue %**
 
 ## Alerts
 
-`Alerts::check` evaluates a `Rule` per sample. A rule fires after its condition holds for `hold`, once, then re-arms when the condition clears; a 2-minute cool-down prevents flapping. Firing appends to the in-memory alert log and spawns `notify-send`.
+`Alerts::check` evaluates a `Rule` per sample. A rule fires after its condition holds for `hold`, once, then re-arms when the condition clears; a 2-minute cool-down prevents flapping. Firing appends to the in-memory alert log and spawns `notify-send`, plus `WT_NOTIFY_CMD` when it is set (`notify_hook`; the agent-finished event goes through the same path).
 
 ## Agent events
 

@@ -1,0 +1,38 @@
+# Automação do Home Assistant: recebe eventos do wt-monitor e anuncia na Alexa.
+# Requer a integração Alexa Media Player (Configurações → Marketplace no HA 2026.11+; HACS nas versões anteriores).
+# Troque `media_player.echo_show` pelo seu Echo (Configurações → Entidades → busque "media_player.").
+# Troque também o webhook_id por algo aleatório e use o mesmo na URL do script.
+alias: wt-monitor → Alexa
+mode: queued
+max: 5
+triggers:
+  - trigger: webhook
+    webhook_id: wt-monitor-TROQUE-POR-ALGO-ALEATORIO
+    allowed_methods: [POST]
+    local_only: true
+variables:
+  ev: "{{ trigger.json.event }}"
+  wt: "{{ (trigger.json.worktree | default('')).split('/') | last }}"
+  fala: >-
+    {% if ev == 'done' %}O worktree {{ wt }} terminou a tarefa.
+    {% elif ev == 'mem' %}Atenção: o worktree {{ wt }} está usando muita memória.
+    {% elif ev == 'sysmem' %}Atenção: a memória do computador está quase cheia.
+    {% elif ev == 'cpu' %}O worktree {{ wt }} está com CPU alta.
+    {% else %}{{ trigger.json.title }}{% endif %}
+conditions:
+  # Só fala durante o dia; à noite o evento é ignorado.
+  - condition: time
+    after: "08:00:00"
+    before: "22:00:00"
+actions:
+  - action: notify.alexa_media
+    data:
+      target: media_player.echo_show
+      message: "{{ fala }}"
+      data:
+        type: announce
+  # Opcional: também manda para o celular, com a última mensagem do agente.
+  # - action: notify.mobile_app_seu_celular
+  #   data:
+  #     title: "{{ trigger.json.title }}"
+  #     message: "{{ trigger.json.body | truncate(200) }}"

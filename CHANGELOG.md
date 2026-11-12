@@ -8,6 +8,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 - **Terminals without an active worktree.** The Terminals tab always offers the watched root (`(raiz) name`) as a destination, so you can open a shell or Claude there before any worktree exists. `POST /api/terminals` accepts the root as `path`; anything else outside a worktree is still refused. Terminals in the root are not placed in a worktree cgroup.
+- **External notifications (opt-in, `WT_NOTIFY_CMD`).** Every notification can also run a command of your choice, with the event in `WT_EVENT`, `WT_WORKTREE`, `WT_TITLE`, `WT_BODY`, `WT_URGENT` and `WT_NOTIFY_JSON`; `WT_NOTIFY_EVENTS` picks which events (`done`, `cpu`, `wait`, `mem`, `sysmem`). It runs in the background and is killed after 10 s. The command only comes from the environment, and nothing is sent anywhere unless it is set.
+- `contrib/home-assistant`: a script that posts the event to a Home Assistant webhook and an automation that announces it on an Echo through Alexa Media Player.
 
 ## [0.4.0] - 2026-11-01
 

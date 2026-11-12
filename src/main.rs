@@ -248,6 +248,10 @@ struct Alerts {
 /// Uma regra de alerta avaliada a cada amostra.
 struct Rule {
     key: String,
+    /// Tipo do evento para o hook externo (`cpu`, `wait`, `mem`, `sysmem`).
+    kind: &'static str,
+    /// Nome do worktree (vazio para alertas do sistema).
+    worktree: String,
     over: bool,
     hold: Duration,
     urgent: bool,
@@ -260,6 +264,8 @@ impl Alerts {
     fn check(&mut self, ts: f64, r: Rule) {
         let Rule {
             key,
+            kind,
+            worktree,
             over,
             hold,
             urgent,
@@ -286,6 +292,7 @@ impl Alerts {
                 self.log.pop_front();
             }
             notify(title, &body, urgent);
+            notify_hook(kind, &worktree, title, &body, urgent);
         }
     }
 
@@ -316,6 +323,82 @@ fn notify(title: &str, body: &str, urgent: bool) {
                 &b,
             ])
             .status();
+    });
+}
+
+/// JSON entregue ao hook externo em `WT_NOTIFY_JSON`.
+fn hook_json(kind: &str, worktree: &str, title: &str, body: &str, urgent: bool) -> String {
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    format!(
+        "{{\"event\":\"{}\",\"worktree\":\"{}\",\"title\":\"{}\",\"body\":\"{}\",\"urgent\":{urgent},\"ts\":{ts}}}",
+        esc(kind),
+        esc(worktree),
+        esc(title),
+        esc(body)
+    )
+}
+
+/// Hook opt-in: se `WT_NOTIFY_CMD` estiver definido, roda-o com `sh -c` a cada notificação.
+/// O comando vem só do ambiente (nunca de uma requisição); recebe os dados em variáveis
+/// `WT_EVENT`, `WT_WORKTREE`, `WT_TITLE`, `WT_BODY`, `WT_URGENT` e `WT_NOTIFY_JSON`.
+/// Roda numa thread própria e é morto após 10 s, então nunca atrasa o painel.
+fn notify_hook(kind: &str, worktree: &str, title: &str, body: &str, urgent: bool) {
+    let Some(cmd) = std::env::var("WT_NOTIFY_CMD")
+        .ok()
+        .filter(|c| !c.trim().is_empty())
+    else {
+        return;
+    };
+    if let Ok(only) = std::env::var("WT_NOTIFY_EVENTS") {
+        if !only.trim().is_empty() && !only.split(',').any(|e| e.trim() == kind) {
+            return;
+        }
+    }
+    let json = hook_json(kind, worktree, title, body, urgent);
+    let (k, w, t, b) = (
+        kind.to_string(),
+        worktree.to_string(),
+        title.to_string(),
+        body.to_string(),
+    );
+    thread::spawn(move || {
+        let child = Command::new("sh")
+            .args(["-c", &cmd])
+            .env("WT_EVENT", &k)
+            .env("WT_WORKTREE", &w)
+            .env("WT_TITLE", &t)
+            .env("WT_BODY", &b)
+            .env("WT_URGENT", if urgent { "1" } else { "0" })
+            .env("WT_NOTIFY_JSON", &json)
+            .stdin(std::process::Stdio::null())
+            .spawn();
+        let Ok(mut child) = child else {
+            eprintln!("WT_NOTIFY_CMD: não foi possível executar o comando");
+            return;
+        };
+        let start = Instant::now();
+        loop {
+            match child.try_wait() {
+                Ok(Some(st)) => {
+                    if !st.success() {
+                        eprintln!("WT_NOTIFY_CMD terminou com {st} (evento {k})");
+                    }
+                    return;
+                }
+                Ok(None) if start.elapsed() < Duration::from_secs(10) => {
+                    thread::sleep(Duration::from_millis(100));
+                }
+                _ => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    eprintln!("WT_NOTIFY_CMD excedeu 10 s e foi interrompido (evento {k})");
+                    return;
+                }
+            }
+        }
     });
 }
 
@@ -435,6 +518,8 @@ fn sampler(
                 ts,
                 Rule {
                     key: format!("cpu:{key}"),
+                    kind: "cpu",
+                    worktree: name.clone(),
                     over: g.cpu >= cfg.cpu_pct,
                     hold,
                     urgent: false,
@@ -451,6 +536,8 @@ fn sampler(
                 ts,
                 Rule {
                     key: format!("wait:{key}"),
+                    kind: "wait",
+                    worktree: name.clone(),
                     over: w.pct >= cfg.wait_pct && w.ready >= 0.3,
                     hold: Duration::from_secs(cfg.wait_secs),
                     urgent: false,
@@ -465,6 +552,8 @@ fn sampler(
                 ts,
                 Rule {
                     key: format!("mem:{key}"),
+                    kind: "mem",
+                    worktree: name.clone(),
                     over: g.rss >= cfg.mem_bytes,
                     hold: Duration::from_secs(5),
                     urgent: false,
@@ -482,6 +571,8 @@ fn sampler(
             ts,
             Rule {
                 key: "sys".into(),
+                kind: "sysmem",
+                worktree: String::new(),
                 over: used_pct >= cfg.sys_pct,
                 hold: Duration::from_secs(10),
                 urgent: true,
@@ -695,7 +786,14 @@ fn handle_event(ctx: &Ctx, body: &str) {
     } else {
         markup_escape(&preview)
     };
-    notify(&format!("✔ {name} terminou"), &body, false);
+    let title = format!("✔ {name} terminou");
+    notify(&title, &body, false);
+    let plain = if preview.is_empty() {
+        "Tarefa concluída"
+    } else {
+        preview.as_str()
+    };
+    notify_hook("done", &name, &title, plain, false);
 }
 
 /// O Claude Code nomeia a pasta do projeto trocando todo caractere não alfanumérico por '-'.
@@ -1075,6 +1173,21 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hook_payload_is_valid_json_shape() {
+        let j = hook_json(
+            "done",
+            "app/feat",
+            "✔ app terminou",
+            "linha 1\n\"ok\"",
+            false,
+        );
+        assert!(j.starts_with("{\"event\":\"done\",\"worktree\":\"app/feat\","));
+        assert!(j.contains("\"body\":\"linha 1\\u000a\\\"ok\\\"\""));
+        assert!(j.contains("\"urgent\":false,\"ts\":"));
+        assert!(j.ends_with('}'));
+    }
 
     #[test]
     fn json_escape() {
