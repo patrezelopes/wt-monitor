@@ -2,7 +2,7 @@
 
 > 🇺🇸 [Read in English](README.md)
 
-Faça um Echo anunciar (ou mostrar na tela de um Echo Show) quando um agente terminar uma tarefa ou a memória estiver alta.
+Faça um Echo anunciar (ou mostrar na tela de um Echo Show) quando um agente precisar de você: uma pergunta ou um pedido de permissão sem resposta (`ask`). Os outros eventos (`done`, `mem`, `sysmem`, ...) também funcionam; escolha com `WT_NOTIFY_EVENTS`. Os eventos `ask` exigem os hooks do agente (`make hooks`).
 
 ```
 wt-monitor ──WT_NOTIFY_CMD──► wt-notify-ha.sh ──POST──► webhook do Home Assistant ──► Alexa Media Player ──► Amazon ──► Echo
@@ -61,7 +61,7 @@ No editor:
 ```ini
 [Service]
 Environment=WT_NOTIFY_CMD=%h/.local/bin/wt-notify-ha.sh
-Environment=WT_NOTIFY_EVENTS=done,mem,sysmem
+Environment=WT_NOTIFY_EVENTS=ask
 ```
 
 Depois `systemctl --user restart wt-monitor` (isso fecha os terminais abertos pelo painel e volta as prioridades ao normal). Use `127.0.0.1` se o Home Assistant roda na mesma máquina; senão, o endereço dele na sua rede.

@@ -14,7 +14,8 @@ variables:
   ev: "{{ trigger.json.event }}"
   wt: "{{ (trigger.json.worktree | default('')).split('/') | last }}"
   fala: >-
-    {% if ev == 'done' %}O worktree {{ wt }} terminou a tarefa.
+    {% if ev == 'ask' %}O worktree {{ wt }} precisa de você.
+    {% elif ev == 'done' %}O worktree {{ wt }} terminou a tarefa.
     {% elif ev == 'mem' %}Atenção: o worktree {{ wt }} está usando muita memória.
     {% elif ev == 'sysmem' %}Atenção: a memória do computador está quase cheia.
     {% elif ev == 'cpu' %}O worktree {{ wt }} está com CPU alta.

@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
-"""Hook Stop do Claude Code: envia a última mensagem do agente ao painel wt-monitor.
-Nunca falha nem bloqueia o agente: sem painel no ar, apenas sai."""
-import json, os, sys, urllib.request
+"""Hook do Claude Code para o painel wt-monitor. Nunca falha nem bloqueia o agente.
+
+- Stop: envia a última mensagem do agente (tarefa concluída).
+- Notification (permission_prompt, elicitation_dialog): o agente espera você → evento `ask`.
+- PreToolUse(AskUserQuestion): se a pergunta seguir sem resposta após WT_ASK_DELAY
+  segundos (padrão 10), envia um evento `ask`. Espera num processo separado; o agente segue na hora.
+"""
+import json, os, sys, time, urllib.request
 
 PORT = os.environ.get("WT_PORT", "8765")
+ASK_TYPES = {"permission_prompt", "elicitation_dialog"}
 
 
 def last_assistant_text(path):
@@ -32,13 +38,23 @@ def last_assistant_text(path):
     return ""
 
 
-def main():
+def answered(path, tool_use_id):
+    """True se a transcrição já tem o tool_result dessa pergunta."""
     try:
-        d = json.load(sys.stdin)
-    except ValueError:
-        return
-    msg = d.get("last_assistant_message") or last_assistant_text(d.get("transcript_path", ""))
-    body = f"cwd: {d.get('cwd', '')}\nsession: {str(d.get('session_id', ''))[:8]}\n\n{str(msg)[:2000]}"
+        with open(path, "rb") as f:
+            f.seek(0, 2)
+            f.seek(max(0, f.tell() - 262144))
+            tail = f.read().decode("utf-8", "replace")
+    except OSError:
+        return True  # sem como saber: melhor não avisar
+    return any(tool_use_id in l and "tool_result" in l for l in tail.splitlines())
+
+
+def send(d, msg, kind=None):
+    head = f"cwd: {d.get('cwd', '')}\nsession: {str(d.get('session_id', ''))[:8]}"
+    if kind:
+        head += f"\nkind: {kind}"
+    body = f"{head}\n\n{str(msg)[:2000]}"
     req = urllib.request.Request(
         f"http://127.0.0.1:{PORT}/event", data=body.encode(), method="POST",
         headers={"X-WT": "1", "Content-Type": "text/plain; charset=utf-8"},
@@ -47,6 +63,47 @@ def main():
         urllib.request.urlopen(req, timeout=2).read()
     except Exception:
         pass
+
+
+def ask_later(d):
+    """Pergunta (AskUserQuestion): espera em segundo plano e só avisa se ninguém respondeu."""
+    try:
+        q = d["tool_input"]["questions"][0]["question"]
+    except (KeyError, IndexError, TypeError):
+        q = "O agente tem uma pergunta para você"
+    tid = d.get("tool_use_id", "")
+    try:
+        delay = float(os.environ.get("WT_ASK_DELAY", "10"))
+    except ValueError:
+        delay = 10.0
+    if os.fork():
+        return  # o hook termina já; o filho espera
+    os.setsid()
+    devnull = os.open(os.devnull, os.O_RDWR)
+    for fd in (0, 1, 2):
+        os.dup2(devnull, fd)
+    try:
+        time.sleep(delay)
+        if not tid or not answered(d.get("transcript_path", ""), tid):
+            send(d, q, "ask")
+    finally:
+        os._exit(0)
+
+
+def main():
+    try:
+        d = json.load(sys.stdin)
+    except ValueError:
+        return
+    ev = d.get("hook_event_name", "Stop")
+    if ev == "Notification":
+        if d.get("notification_type") in ASK_TYPES:
+            send(d, d.get("message") or "O agente está esperando você", "ask")
+    elif ev == "PreToolUse":
+        if d.get("tool_name") == "AskUserQuestion":
+            ask_later(d)
+    elif ev == "Stop":
+        send(d, d.get("last_assistant_message") or last_assistant_text(d.get("transcript_path", "")))
 
 
 main()
