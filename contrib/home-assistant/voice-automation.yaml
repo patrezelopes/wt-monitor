@@ -1,0 +1,49 @@
+# Automação do Home Assistant: responde "status dos agentes" e "quem precisa de mim" na Alexa em que você falou.
+# Requer o rest_command `wt_attention` (veja README) e, no app Alexa, uma rotina para cada frase
+# (senão a Alexa responde "não sei"). Troque os media_player pelos seus Echos.
+- id: wt_monitor_voice
+  alias: Alexa → wt-monitor (status por voz)
+  description: Responde "status dos agentes" e "quem precisa de mim" na Alexa em que você falou.
+  mode: queued
+  max: 3
+  triggers:
+    - trigger: state
+      entity_id:
+        - media_player.echo_show
+        - media_player.echo_show_5
+        - media_player.echo_dot
+      attribute: last_called_timestamp
+  variables:
+    frase: "{{ (state_attr(trigger.entity_id, 'last_called_summary') or '') | lower }}"
+    pedido: >-
+      {% if 'precisa de mim' in frase or 'precisa de você' in frase %}quem
+      {% elif 'status' in frase and 'agente' in frase %}status
+      {% else %}nada{% endif %}
+  conditions:
+    - condition: template
+      value_template: "{{ pedido != 'nada' }}"
+  actions:
+    - action: rest_command.wt_attention
+      response_variable: r
+    - variables:
+        d: "{{ r.content if r.status == 200 else none }}"
+        resposta: >-
+          {% if d is none %}Não consegui falar com o wt-monitor.
+          {% elif pedido == 'status' %}
+            {%- set n = d.pending | length -%}
+            {{ d.agents }} {{ 'agente aberto' if d.agents == 1 else 'agentes abertos' }}, {{ d.busy }} trabalhando.
+            {% if n == 0 %}Ninguém está esperando você.
+            {%- else %}{{ n }} {{ 'esperando' }} você: {{ d.pending | map(attribute='worktree') | map('regex_replace', '^.*/', '') | join(', ') }}.{% endif %}
+          {% else %}
+            {%- if d.pending | length == 0 %}Nenhum agente está esperando você.
+            {%- else %}{% for p in d.pending %}{{ p.worktree.split('/') | last }}: {{ p.question | truncate(160) }} {% endfor %}{% endif %}
+          {% endif %}
+    - action: notify.alexa_media
+      data:
+        target: "{{ trigger.entity_id }}"
+        title: wt-monitor
+        message: "{{ resposta | trim }}"
+        data:
+          type: announce
+          method: all
+

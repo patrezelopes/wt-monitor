@@ -326,6 +326,41 @@ fn notify(title: &str, body: &str, urgent: bool) {
     });
 }
 
+/// Pendências expiram depois disso (o agente pode ter sido fechado sem um Stop).
+const PENDING_TTL: f64 = 30.0 * 60.0;
+
+/// Resumo para assistentes de voz: agentes ativos e quem espera você. Só leitura.
+fn attention_json(ctx: &Ctx) -> String {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs_f64())
+        .unwrap_or(0.0);
+    let agents = ctx.agents.lock().unwrap().clone();
+    let busy = agents.iter().filter(|(_, cpu)| *cpu >= 15.0).count();
+    let mut pend = ctx.pending.lock().unwrap();
+    // Some o que expirou ou cujo worktree não tem mais Claude rodando.
+    pend.retain(|_, p| now - p.t < PENDING_TTL && agents.iter().any(|(n, _)| *n == p.name));
+    let mut list: Vec<&Pending> = pend.values().collect();
+    list.sort_by(|a, b| a.t.partial_cmp(&b.t).unwrap());
+    let items: Vec<String> = list
+        .iter()
+        .map(|p| {
+            format!(
+                "{{\"worktree\":\"{}\",\"question\":\"{}\",\"age\":{:.0}}}",
+                esc(&p.name),
+                esc(&p.msg),
+                now - p.t
+            )
+        })
+        .collect();
+    format!(
+        "{{\"agents\":{},\"busy\":{},\"pending\":[{}]}}",
+        agents.len(),
+        busy,
+        items.join(",")
+    )
+}
+
 /// JSON entregue ao hook externo em `WT_NOTIFY_JSON`.
 fn hook_json(kind: &str, worktree: &str, title: &str, body: &str, urgent: bool) -> String {
     let ts = SystemTime::now()
@@ -407,6 +442,7 @@ fn sampler(
     out: Arc<Mutex<String>>,
     events: Arc<Mutex<VecDeque<Event>>>,
     control: Arc<sched::Control>,
+    agents: Arc<Mutex<Vec<(String, f64)>>>,
 ) {
     let cfg = Cfg::from_env();
     let mut alerts = Alerts::default();
@@ -671,6 +707,14 @@ fn sampler(
         }
         j.push_str("]}");
         *out.lock().unwrap() = j;
+        *agents.lock().unwrap() = groups
+            .iter()
+            .filter(|(_, g)| g.claude)
+            .map(|(path, g)| {
+                let n = path.strip_prefix(&root).unwrap_or(path);
+                (n.to_string_lossy().into_owned(), g.cpu)
+            })
+            .collect();
 
         prev_t = Some(now);
         prev_pids = next_pids;
@@ -688,9 +732,20 @@ struct Event {
     msg: String,
 }
 
+/// Agente parado esperando você (evento `ask`), por sessão. Some quando a sessão termina o turno (Stop).
+struct Pending {
+    t: f64,
+    name: String,
+    msg: String,
+}
+
 struct Ctx {
     data: Arc<Mutex<String>>,
     events: Arc<Mutex<VecDeque<Event>>>,
+    /// Sessão → pergunta/permissão pendente.
+    pending: Mutex<HashMap<String, Pending>>,
+    /// Worktrees com processo do Claude e a CPU deles, da última amostra.
+    agents: Arc<Mutex<Vec<(String, f64)>>>,
     root: PathBuf,
     port: u16,
     terms: terms::Terms,
@@ -766,6 +821,27 @@ fn handle_event(ctx: &Ctx, body: &str) {
     };
     let msg: String = msg.trim().chars().take(600).collect();
     let preview: String = msg.chars().take(300).collect();
+    let key = if session.is_empty() {
+        name.clone()
+    } else {
+        session.clone()
+    };
+    let now_s = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs_f64())
+        .unwrap_or(0.0);
+    if ask {
+        ctx.pending.lock().unwrap().insert(
+            key,
+            Pending {
+                t: now_s,
+                name: name.clone(),
+                msg: preview.clone(),
+            },
+        );
+    } else {
+        ctx.pending.lock().unwrap().remove(&key);
+    }
     if ask {
         let title = format!("❓ {name} precisa de você");
         let plain = if preview.is_empty() {
@@ -1080,6 +1156,9 @@ fn serve(mut s: TcpStream, ctx: &Ctx) {
     if route == "/api/preview" {
         return respond(&mut s, "200 OK", "application/json", &preview(ctx, query));
     }
+    if route == "/api/attention" {
+        return respond(&mut s, "200 OK", "application/json", &attention_json(ctx));
+    }
     if route == "/api" {
         let json = ctx.data.lock().unwrap().clone();
         respond(&mut s, "200 OK", "application/json", &json);
@@ -1138,6 +1217,8 @@ fn main() {
     let ctx = Arc::new(Ctx {
         data: Arc::new(Mutex::new(String::from("{}"))),
         events: Arc::new(Mutex::new(VecDeque::new())),
+        pending: Mutex::new(HashMap::new()),
+        agents: Arc::new(Mutex::new(Vec::new())),
         root: root.clone(),
         port,
         terms: terms::Terms::new(terminals, token.clone()),
@@ -1152,6 +1233,7 @@ fn main() {
                 c.data.clone(),
                 c.events.clone(),
                 c.control.clone(),
+                c.agents.clone(),
             )
         });
     }
