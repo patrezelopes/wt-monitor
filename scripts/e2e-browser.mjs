@@ -62,7 +62,8 @@ try {
   await c.send('Page.navigate', { url: `http://127.0.0.1:${PORT}/?mode=term#token=${token}` });
   ok(await c.until(`!document.getElementById('tnew-shell').disabled && location.hash === ''`), 'com #token no link, os botões ativam e o token some do endereço');
   ok(await c.until(`!document.getElementById('segterm').hidden && document.querySelectorAll('#twt option').length > 0`), 'a aba Terminais aparece e lista o worktree');
-  ok(await c.until(`document.querySelector('#twt option').textContent === 'acme/api'`), 'o seletor traz o worktree acme/api');
+  ok(await c.until(`[...document.querySelectorAll('#twt option')].some(o => o.textContent === 'acme/api')`), 'o seletor traz o worktree acme/api');
+  ok(await c.eval(`document.querySelector('#twt option').textContent.startsWith('(raiz) ')`), 'a raiz vigiada vem primeiro no seletor');
 
   await c.eval(`document.getElementById('tnew-shell').click()`);
   ok(await c.until(`TERM.panes.size === 1 && [...TERM.panes.values()][0].status === 'conectado'`), 'clicar em "Novo terminal" abre e conecta um terminal');
