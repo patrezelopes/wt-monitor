@@ -5,6 +5,7 @@
 - Notification (permission_prompt, elicitation_dialog): o agente espera você → evento `ask`.
 - PreToolUse(AskUserQuestion): se a pergunta seguir sem resposta após WT_ASK_DELAY
   segundos (padrão 10), envia um evento `ask`. Espera num processo separado; o agente segue na hora.
+- PostToolUse(AskUserQuestion): você respondeu → evento `answered`, que tira a pendência na hora.
 """
 import json, os, sys, time, urllib.request
 
@@ -102,6 +103,9 @@ def main():
     elif ev == "PreToolUse":
         if d.get("tool_name") == "AskUserQuestion":
             ask_later(d)
+    elif ev == "PostToolUse":
+        if d.get("tool_name") == "AskUserQuestion":
+            send(d, "", "answered")
     elif ev == "Stop":
         send(d, d.get("last_assistant_message") or last_assistant_text(d.get("transcript_path", "")))
 
