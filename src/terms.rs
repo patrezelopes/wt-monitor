@@ -383,7 +383,8 @@ pub fn route(
                 Ok(r) if !r.as_os_str().is_empty() => r.to_string_lossy().into_owned(),
                 _ => format!(
                     "(raiz) {}",
-                    wt.file_name().map_or(String::new(), |n| n.to_string_lossy().into_owned())
+                    wt.file_name()
+                        .map_or(String::new(), |n| n.to_string_lossy().into_owned())
                 ),
             };
             let size = (num("cols", 80, 500), num("rows", 24, 300));
