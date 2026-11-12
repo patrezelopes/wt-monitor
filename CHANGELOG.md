@@ -6,12 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-12
+
 ### Added
 - **Terminals without an active worktree.** The Terminals tab always offers the watched root (`(raiz) name`) as a destination, so you can open a shell or Claude there before any worktree exists. `POST /api/terminals` accepts the root as `path`; anything else outside a worktree is still refused. Terminals in the root are not placed in a worktree cgroup.
 - **External notifications (opt-in, `WT_NOTIFY_CMD`).** Every notification can also run a command of your choice, with the event in `WT_EVENT`, `WT_WORKTREE`, `WT_TITLE`, `WT_BODY`, `WT_URGENT` and `WT_NOTIFY_JSON`; `WT_NOTIFY_EVENTS` picks which events (`done`, `cpu`, `wait`, `mem`, `sysmem`). It runs in the background and is killed after 10 s. The command only comes from the environment, and nothing is sent anywhere unless it is set.
 - **"Waiting for you" notifications.** The agent hook now also handles `Notification` (`permission_prompt`, `elicitation_dialog`: Claude Code only sends it after the prompt has waited ~6 s) and `PreToolUse` for `AskUserQuestion` (notifies only if the question is still unanswered after `WT_ASK_DELAY` seconds, default 10, checked in a detached process so the agent is never delayed). They raise a desktop notification and the `ask` event for `WT_NOTIFY_CMD`. Run `make hooks` again to add the new entries.
 - `GET /api/attention`: read-only summary for voice assistants: open agents, busy agents and who is waiting for you (with the question), from the `ask` events; an entry clears when that session's next `Stop` arrives, after 30 min, or when the worktree has no Claude process.
 - `contrib/home-assistant`: a script that posts the event to a Home Assistant webhook, an automation that announces it on an Echo through Alexa Media Player, and a voice automation ("Alexa, status dos agentes", "Alexa, quem precisa de mim") built on `/api/attention`.
+
+### Fixed
+- Terminals: closing a pane right after a render could raise `TypeError: Cannot read properties of undefined (reading 'el')` when fitting the panes on the next frame.
+- CI was red since 0.4.0 (`cargo fmt --check` on `src/terms.rs`, and a browser test still expecting a worktree as the first terminal option).
 
 ## [0.4.0] - 2026-11-01
 
@@ -82,7 +88,8 @@ All notable changes to this project are documented here. The format follows
 ### Added
 - Initial release: per-worktree CPU, memory, threads and CPU affinity from `/proc`; alerts with desktop notifications; Claude Code `Stop` hook for "task finished" events; session preview; pins; playful view; systemd user service.
 
-[Unreleased]: https://github.com/patrezelopes/wt-monitor/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/patrezelopes/wt-monitor/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/patrezelopes/wt-monitor/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/patrezelopes/wt-monitor/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/patrezelopes/wt-monitor/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/patrezelopes/wt-monitor/compare/v0.2.0...v0.3.0
