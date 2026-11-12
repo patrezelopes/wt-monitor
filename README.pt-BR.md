@@ -30,7 +30,7 @@ Um único binário, **sem dependências** (só a biblioteca padrão do Rust), s�
 - **Contenção de CPU** – cada worktree mostra quanto tempo passou *esperando por um core* (fila %), ao lado da pressão de CPU do sistema (PSI), com alerta quando um worktree é sufocado. Veja [Priorizar o trabalho](#priorizar-o-trabalho-cpu-e-memória).
 - **Priorizar o trabalho (opt-in)** – dê prioridade alta ou baixa de CPU a um worktree, coloque um em **Foco** e limite ou proteja a memória dele, tudo reversível, para que uma tarefa prioritária não seja atrasada pelas outras. Nada é encerrado. Usa cgroup v2; veja abaixo.
 - **Filtros, busca e fixados** – filtre por status, busque por worktree, branch, agente ou skill (`Ctrl K`) e marque com ★ os worktrees que importam; eles ficam no topo mesmo sem processos.
-- **Notificações do desktop** (via `notify-send`) para CPU/memória altas em um worktree, memória alta do sistema e **quando um agente termina uma tarefa**, com a última mensagem dele.
+- **Notificações do desktop** (via `notify-send`) para CPU/memória altas em um worktree, memória alta do sistema, **quando um agente termina uma tarefa** (com a última mensagem dele) e **quando um agente espera você**: um pedido de permissão ou uma pergunta sem resposta.
 - **Barras de CPU por core**, memória do sistema e load.
 
 ## Como isso se diferencia?
@@ -99,14 +99,14 @@ Linha de comando: `wt-monitor [raiz=~/dev] [porta=8765] [--terminals] [--control
 | `WT_CONTROL` | _(desligado)_ | `1` habilita o controle de prioridade, igual a `--control` |
 | `WT_EDITOR` | o primeiro de `code`, `cursor`, `codium`, `windsurf`, `zed` encontrado | Comando do editor do botão *Abrir no…* da gaveta, ex.: `cursor` ou `code --new-window` |
 | `WT_NOTIFY_CMD` | _(desligado)_ | Comando de shell executado a cada notificação, ex.: para repassá-la ao Home Assistant. Veja [Notificações externas](#notificações-externas-home-assistant-alexa) |
-| `WT_NOTIFY_EVENTS` | _(todos)_ | Eventos repassados ao `WT_NOTIFY_CMD`, separados por vírgula: `done`, `cpu`, `wait`, `mem`, `sysmem` |
+| `WT_NOTIFY_EVENTS` | _(todos)_ | Eventos repassados ao `WT_NOTIFY_CMD`, separados por vírgula: `ask`, `done`, `cpu`, `wait`, `mem`, `sysmem` |
 | `WT_TOKEN_FILE` | `$XDG_CONFIG_HOME/wt-monitor/token`, senão `~/.config/wt-monitor/token` | Onde fica o token dos terminais (modo `0600`) |
 
 Cada alerta dispara uma vez, rearma quando o valor volta ao normal e espera pelo menos 2 minutos antes de repetir. O hook respeita `WT_PORT` se você mudou a porta.
 
 ### Notificações externas (Home Assistant, Alexa)
 
-O wt-monitor não faz requisições de rede por conta própria. Para receber notificações em outro lugar (Home Assistant, um anúncio na Alexa, o celular), defina `WT_NOTIFY_CMD`: ele é executado com `sh -c` junto com cada notificação do desktop, com `WT_EVENT` (`done`, `cpu`, `wait`, `mem`, `sysmem`), `WT_WORKTREE`, `WT_TITLE`, `WT_BODY` (texto puro), `WT_URGENT` (`0`/`1`) e `WT_NOTIFY_JSON` (tudo isso num objeto JSON) no ambiente. Roda em segundo plano e é interrompido após 10 s; falhas vão para o log do serviço. O comando vem só do ambiente.
+O wt-monitor não faz requisições de rede por conta própria. Para receber notificações em outro lugar (Home Assistant, um anúncio na Alexa, o celular), defina `WT_NOTIFY_CMD`: ele é executado com `sh -c` junto com cada notificação do desktop, com `WT_EVENT` (`ask` quando um agente espera sua resposta ou permissão, `done`, `cpu`, `wait`, `mem`, `sysmem`), `WT_WORKTREE`, `WT_TITLE`, `WT_BODY` (texto puro), `WT_URGENT` (`0`/`1`) e `WT_NOTIFY_JSON` (tudo isso num objeto JSON) no ambiente. Roda em segundo plano e é interrompido após 10 s; falhas vão para o log do serviço. O comando vem só do ambiente.
 
 Para o Home Assistant, [`contrib/home-assistant`](contrib/home-assistant) tem um [passo a passo](contrib/home-assistant/README.pt-BR.md), um script que faz POST do JSON num webhook e uma automação que anuncia num Echo pelo [Alexa Media Player](https://github.com/alandtse/alexa_media_player):
 
@@ -114,7 +114,7 @@ Para o Home Assistant, [`contrib/home-assistant`](contrib/home-assistant) tem um
 install -m755 contrib/home-assistant/wt-notify-ha.sh ~/.local/bin/
 echo 'http://homeassistant.local:8123/api/webhook/<seu-webhook-id>' > ~/.config/wt-monitor/ha-webhook
 chmod 600 ~/.config/wt-monitor/ha-webhook
-systemctl --user edit wt-monitor   # adicione: [Service] Environment=WT_NOTIFY_CMD=%h/.local/bin/wt-notify-ha.sh WT_NOTIFY_EVENTS=done,mem,sysmem
+systemctl --user edit wt-monitor   # adicione: [Service] Environment=WT_NOTIFY_CMD=%h/.local/bin/wt-notify-ha.sh WT_NOTIFY_EVENTS=ask
 ```
 
 Parâmetros de URL: `?mode=sober|fun|term` (`term` só com os terminais habilitados), `?theme=dark|light`, `?layout=1|2|4` (painéis de terminal lado a lado), `?demo` e, com `?demo`, também `?open=<nome do worktree>&tab=agents|activity|procs|overview|prio`; `?demo&mode=term&layout=4` mostra terminais simulados.

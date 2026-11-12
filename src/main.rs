@@ -748,6 +748,8 @@ fn handle_event(ctx: &Ctx, body: &str) {
             .unwrap_or_default()
     };
     let (cwd, session) = (field("cwd:"), field("session:"));
+    // `kind: ask` = o agente está parado esperando você (pergunta ou permissão); o padrão é tarefa concluída.
+    let ask = field("kind:") == "ask";
     let (path, name) = match worktree_of(Path::new(&cwd), &ctx.root, &mut HashMap::new()) {
         Some(p) => {
             let n = p
@@ -764,6 +766,17 @@ fn handle_event(ctx: &Ctx, body: &str) {
     };
     let msg: String = msg.trim().chars().take(600).collect();
     let preview: String = msg.chars().take(300).collect();
+    if ask {
+        let title = format!("❓ {name} precisa de você");
+        let plain = if preview.is_empty() {
+            "O agente está esperando uma resposta"
+        } else {
+            preview.as_str()
+        };
+        notify(&title, &markup_escape(plain), true);
+        notify_hook("ask", &name, &title, plain, true);
+        return;
+    }
     let t = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs_f64())
