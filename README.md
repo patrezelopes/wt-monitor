@@ -98,9 +98,24 @@ Command line: `wt-monitor [root=~/dev] [port=8765] [--terminals] [--control]` (o
 | `WT_TERMINALS` | _(off)_ | `1` enables terminals, same as `--terminals` |
 | `WT_CONTROL` | _(off)_ | `1` enables priority control, same as `--control` |
 | `WT_EDITOR` | first of `code`, `cursor`, `codium`, `windsurf`, `zed` found | Editor command for the drawer's *Open in…* button, e.g. `cursor` or `code --new-window` |
+| `WT_NOTIFY_CMD` | _(off)_ | Shell command run for every notification, e.g. to forward it to Home Assistant. See [External notifications](#external-notifications-home-assistant-alexa) |
+| `WT_NOTIFY_EVENTS` | _(all)_ | Comma-separated events passed to `WT_NOTIFY_CMD`: `done`, `cpu`, `wait`, `mem`, `sysmem` |
 | `WT_TOKEN_FILE` | `$XDG_CONFIG_HOME/wt-monitor/token`, else `~/.config/wt-monitor/token` | Where the terminals' token is kept (mode `0600`) |
 
 Each alert fires once, re-arms when the value returns to normal, and waits at least 2 minutes before repeating. The hook honours `WT_PORT` if you changed the port.
+
+### External notifications (Home Assistant, Alexa)
+
+wt-monitor makes no network requests by itself. If you want notifications somewhere else (Home Assistant, an Alexa announcement, your phone), set `WT_NOTIFY_CMD`: it is run with `sh -c` next to every desktop notification, with `WT_EVENT` (`done`, `cpu`, `wait`, `mem`, `sysmem`), `WT_WORKTREE`, `WT_TITLE`, `WT_BODY` (plain text), `WT_URGENT` (`0`/`1`) and `WT_NOTIFY_JSON` (all of it as one JSON object) in its environment. It runs in the background and is killed after 10 s; failures go to the service log. The command only ever comes from the environment.
+
+For Home Assistant, [`contrib/home-assistant`](contrib/home-assistant) has a script that POSTs the JSON to a webhook and an automation that announces it on an Echo through [Alexa Media Player](https://github.com/alandtse/alexa_media_player):
+
+```bash
+install -m755 contrib/home-assistant/wt-notify-ha.sh ~/.local/bin/
+echo 'http://homeassistant.local:8123/api/webhook/<your-webhook-id>' > ~/.config/wt-monitor/ha-webhook
+chmod 600 ~/.config/wt-monitor/ha-webhook
+systemctl --user edit wt-monitor   # add: [Service] Environment=WT_NOTIFY_CMD=%h/.local/bin/wt-notify-ha.sh WT_NOTIFY_EVENTS=done,mem,sysmem
+```
 
 URL parameters: `?mode=sober|fun|term` (`term` only when terminals are enabled), `?theme=dark|light`, `?layout=1|2|4` (terminal panes side by side), `?demo`, and with `?demo` also `?open=<worktree name>&tab=agents|activity|procs|overview|prio`; `?demo&mode=term&layout=4` shows simulated terminals.
 
