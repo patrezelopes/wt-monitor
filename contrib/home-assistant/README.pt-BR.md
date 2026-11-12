@@ -73,3 +73,19 @@ WT_NOTIFY_JSON='{"event":"done","worktree":"teste","title":"teste","body":"teste
 ```
 
 O Home Assistant responde ao webhook com sucesso mesmo quando a automação falha. Se nada acontecer, veja o log (*Configurações → Sistema → Logs*). `Action notify.alexa_media not found` quer dizer que o Alexa Media Player não carregou (às vezes ele esgota o tempo depois de um reinício): recarregue-o em *Dispositivos e serviços*.
+
+## 6. Perguntar à Alexa (opcional)
+
+Diga **"Alexa, status dos agentes"** (quantos agentes estão abertos, quantos trabalhando e quem espera você) ou **"Alexa, quem precisa de mim"** (lê as perguntas pendentes), e o Echo em que você falou responde. Num Echo Show a resposta também aparece na tela. É só leitura: nada pode ser iniciado, aprovado ou respondido por voz.
+
+1. Adicione ao `configuration.yaml` (o `GET /api/attention` do wt-monitor é só leitura e só em loopback, então o Home Assistant precisa rodar na mesma máquina):
+
+   ```yaml
+   rest_command:
+     wt_attention:
+       url: http://127.0.0.1:8765/api/attention
+       method: GET
+       timeout: 5
+   ```
+2. Importe [`voice-automation.yaml`](voice-automation.yaml) com os seus Echos em `entity_id`.
+3. No app Alexa, crie uma rotina para cada frase (*Quando você disser* → a frase; ação: *Alexa diz* → "Um momento"). Sem ela a Alexa responde "não sei" antes de a automação falar. A automação lê o que você disse pelo `last_called_summary` do Alexa Media Player, então a frase também passa pela Amazon.

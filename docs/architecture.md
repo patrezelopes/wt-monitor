@@ -43,6 +43,8 @@ The server maps `cwd` to a worktree, stores the event (last 30), and notifies. T
 
 ## Preview and agent data
 
+`GET /api/attention` returns `{agents, busy, pending: [{worktree, question, age}]}`: the worktrees with a Claude process (from the last sample), those at CPU ≥ 15 %, and the agents waiting for you. `pending` is filled by `kind: ask` events on `/event` (keyed by session) and cleared by that session's next `Stop` event, after 30 minutes, or when its worktree no longer has a Claude process. Read-only and loopback-only like the rest of the server; meant for voice assistants (see `contrib/home-assistant`).
+
 `GET /api/preview?path=<worktree>[&n=60][&b=400000][&subs=1]` validates that the path is absolute, inside the root, free of `..`, and contains `.git`. It then finds the newest `*.jsonl` transcript in `~/.claude*/projects/<path with every non-alphanumeric char replaced by '-'>/` (falling back to sub-directories of it), and returns the last `n` complete lines (default 60, max 400; reading at most `b` bytes from the end, max 800 KB) as JSON-escaped strings. With `subs=1` it also returns up to 8 sub-agents modified in the last 2 hours, read from `<session>/subagents/agent-<id>.jsonl` and `.meta.json` (agent type, description, model, `finished`), each with the tail of its transcript. **Parsing happens in the browser**, so the server needs no JSON parser.
 
 Each group in `/api` also carries the worktree's `branch`, read from `.git/HEAD` (or the `gitdir:` a linked worktree points to).
